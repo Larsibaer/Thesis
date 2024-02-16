@@ -1,0 +1,95 @@
+---
+title: "Thesis"
+author: "Lars Wenger"
+date: "2024-02-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r install}
+# We start by installing the necessary libraries. Make sure to uncomment and run
+# only the libraries which you haven't installed already. 
+#install.packages("DescTools")
+#install.packages("xgboost")
+#install.packages("caret")
+#install.packages("dplyr")
+#install.packages("tidyverse")
+#install.packages("mltools")
+#install.packages("reshape2")
+#install.packages("data.table")
+#install.packages("pracma")
+#install.packages("rsample")
+# install.packages("PRROC")
+# install.packages("e1071")
+# install.packages("dlookr")
+# install.packages("pROC")
+# install.packages("ROCR")
+# install.packages("nnet")
+```
+```{r libraries}
+library(DescTools)
+library(xgboost)
+library(caret)
+library(dplyr)
+library(tidyverse)
+library(mltools)
+library(reshape2)
+library(data.table)
+library(pracma)
+library(rsample)
+library(PRROC)
+library(e1071)
+library(dlookr)
+library(pROC)
+library(ROCR)
+library(nnet)
+options(scipen=999)
+```
+
+
+```{r import}
+## Import data
+# We set the working directory and we call the data that we are going to use. Please import the csv file.
+rm(list=ls())
+
+set.seed(7)
+
+setwd("C:/Thesis")
+#read json file
+cases_data <- read_csv("Data/u_cases_thesis.csv")
+data <- cases_data # We make a copy from the original dataset and work on the copy
+
+```
+```{r data}
+print(data$ca_opened_at[0:10])
+data$ca_opened_at <- strptime(data$ca_opened_at, "%d-%m-%Y %H:%M:%S", tz="UTC")
+data <- data %>% 
+  filter(Year(ca_opened_at) >= Year("2020-01-01"))
+```
+```{r data}
+# Let's run basic check on the dataset 
+summary(data)
+str(data)
+table(data$Attrition)
+PercTable(data)
+```
+# Data quality issues 
+## Checking for NAs
+
+One of the key data quality issues is missing data. In the next step, we use the apply function to check the presence of NAs in each of the variables included in the dataset. 
+```{r}
+apply(data, 2, function(x) any(is.na(x)))
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
