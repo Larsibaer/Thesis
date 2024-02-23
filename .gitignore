@@ -1,3 +1,5 @@
 Data/
 Templates/
+wordcloud/
+.RData
 .Rproj.user
