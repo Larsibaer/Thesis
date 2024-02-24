@@ -45,6 +45,7 @@ library(dlookr)
 library(pROC)
 library(ROCR)
 library(nnet)
+library(ggplot2)
 options(scipen=999)
 ```
 
@@ -58,38 +59,115 @@ set.seed(7)
 
 setwd("C:/Thesis")
 #read json file
-cases_data <- read_csv("Data/u_cases_thesis.csv")
+cases_data <- read_csv("Data/sn_customerservice_case_utf8.csv", locale = locale(encoding = "UTF-8"))
 data <- cases_data # We make a copy from the original dataset and work on the copy
 
 ```
-```{r data}
-print(data$ca_opened_at[0:10])
-data$ca_opened_at <- strptime(data$ca_opened_at, "%d-%m-%Y %H:%M:%S", tz="UTC")
-data <- data %>% 
-  filter(Year(ca_opened_at) >= Year("2020-01-01"))
+```{r strucutre}
+data <- select(cases_data, number = number, case = case, description = description, case_type = u_case_type, due_date = due_date, first_response_time = first_response_time, closed = closed_at, opened = opened_at, account = account, contact = contact, created_by = sys_created_by, business_service = business_service, business_service_activity = u_business_service_activity, assigned_to = assigned_to, assignment_group = assignment_group, auto_close = auto_close, time_worked = time_worked, reassignment_count = reassignment_count, impact = impact, priority = priority, urgency = urgency, escalation = escalation, comments = comments, case_cause = u_case_cause, cause = cause, close_notes = close_notes, resolution_code = resolution_code, problem = problem)
+
 ```
+
+```{r data}
+# Filter between dates and removing rows who are not closed
+data <- data %>% 
+  filter(Year(strptime(data$opened, "%d-%m-%Y %H:%M:%S", tz="UTC")) <= Year("2024-02-01")) %>%
+  filter(Year(strptime(data$opened, "%d-%m-%Y %H:%M:%S", tz="UTC")) >= Year("2020-01-01")) %>%
+  filter(!is.na(closed))
+```
+```{r merging-sla}
+# merg data sets
+sla_data_clean <- read_csv("Data/task_sla.csv")
+
+# Remove all rows, where sla_data£status is Cancelled
+# sla_data <- sla_data %>% 
+#   filter(stage != "Cancelled")
+
+
+# Merge data and sla_data, where the number and closed of data is the same as task and stop time of sla_data
+
+sla_data <- select(sla_data_clean, task = task, business_percentage = business_percentage, sla_has_breached = has_breached, duration = duration, end_time = end_time)
+
+#remove duplicates of sla_data$task
+sla_data <- sla_data %>% 
+  distinct(task, .keep_all = TRUE)
+
+data <- merge(x = data, y = sla_data, 
+                     by.x = c("number", "closed"), 
+                     by.y = c("task", "end_time"), 
+                     all.x = TRUE)
+
+```
+```{r type}
+# Transforming the type of the variables
+data$opened <- as.POSIXct(strptime(data$opened, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+data$closed <- as.POSIXct(strptime(data$closed, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+data$due_date <- as.POSIXct(strptime(data$due_date, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+data$first_response_time <- as.POSIXct(strptime(data$first_response_time, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+data$auto_close <- as.factor(data$auto_close)
+data$business_percentage <- as.numeric(data$business_percentage)
+data$sla_has_breached <- as.factor(data$sla_has_breached)
+data$reassignment_count <- as.numeric(data$reassignment_count)
+data$impact <- as.factor(data$impact)
+data$priority <- as.factor(data$priority)
+data$urgency <- as.factor(data$urgency)
+data$escalation <- as.factor(data$escalation)
+data$case_cause <- as.factor(data$case_cause)
+data$resolution_code <- as.factor(data$resolution_code)
+data$problem <- as.factor(data$problem)
+data$assignment_group <- as.factor(data$assignment_group)
+data$assigned_to <- as.factor(data$assigned_to)
+data$created_by <- as.factor(data$created_by)
+data$business_service <- as.factor(data$business_service)
+data$business_service_activity <- as.factor(data$business_service_activity)
+data$case_type <- as.factor(data$case_type)
+data$account <- as.factor(data$account)
+data$contact <- as.factor(data$contact)
+```
+```{r save}
+# Save the data
+write.csv(data, "Data/data.csv",row.names = FALSE)
+```
+
+
+
+
+
 ```{r data}
 # Let's run basic check on the dataset 
 summary(data)
 str(data)
-table(data$Attrition)
-PercTable(data)
-```
-# Data quality issues 
-## Checking for NAs
 
-One of the key data quality issues is missing data. In the next step, we use the apply function to check the presence of NAs in each of the variables included in the dataset. 
+#PercTable(data$ca_time_worked)
+```
+```{r plots}
+# Filter the top 10 assignment groups of number of cases
+data_assignment_group_top10 <- data %>% 
+  group_by(assignment_group) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  head(10)
+
+# Filter data, where assignment group is in the top 10
+data_assignment_group <- data %>% 
+  filter(assignment_group %in% data_assignment_group_top10$assignment_group)
+
+ggplot(data = data_assignment_group) +
+  geom_bar(mapping = aes(x = assignment_group, fill = assignment_group))
+```
+We see that most Tickets is assigned to the assignment group "Service Desk". Which is the first level of support in the Unico Data AG. 
+
 ```{r}
-apply(data, 2, function(x) any(is.na(x)))
+ggplot(data = data) +
+  geom_point(
+    mapping = aes(x = time_worked, y = reassignment_count, color = assignment_group)) +
+  geom_smooth(mapping = aes(x = time_worked, y = reassignment_count)) +
+  facet_wrap(~ assignment_group, nrow = 5)
+```
+```{r plot}
+ggplot(data = data, mapping = aes(x = data$time_worked, y = data$reassignment_count)) +
+  geom_point(mapping = aes(color = assignment_group, size = data$business_percentage)) +
+  geom_smooth()
 ```
 
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
