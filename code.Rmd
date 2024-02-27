@@ -123,6 +123,7 @@ data$business_service_activity <- as.factor(data$business_service_activity)
 data$case_type <- as.factor(data$case_type)
 data$account <- as.factor(data$account)
 data$contact <- as.factor(data$contact)
+sapply(data, class)
 ```
 ```{r save}
 # Save the data
@@ -168,6 +169,69 @@ ggplot(data = data) +
 ggplot(data = data, mapping = aes(x = data$time_worked, y = data$reassignment_count)) +
   geom_point(mapping = aes(color = assignment_group, size = data$business_percentage)) +
   geom_smooth()
+```
+
+```{r}  
+library(viridis)   
+library(RColorBrewer)
+# We restart with the salaries dataset 
+data(Salaries, package="carData")
+str(Salaries)
+head(Salaries)
+summary(Salaries)
+# ------------------------------ Grouping -------------------------- #
+# Let's plot salaries and the years of service
+ggplot(data, 
+       aes(x = data$time_worked, 
+           y = data$)) +
+  geom_point() + 
+  labs(title = "Academic salary by years of service")
+
+
+
+# In the next step, let's try to add further information to the scatter plot
+ggplot(Salaries, aes(x = yrs.service, 
+                     y = salary, 
+                     color = sex)) +
+  geom_point() +
+  labs(title = "Academic salary by sex and years of service") 
+
+
+
+ggplot(Salaries, 
+       aes(x = yrs.service, 
+            y = salary, 
+            color = rank,
+            shape = sex)) +     # adding sex 
+  geom_point(size = 3, 
+             alpha = .6) +
+  labs(title = "Academic salary by rank, sex, and years since degree")
+
+
+# Only bubble plot - colors with viridis  
+ggplot(Salaries, 
+       aes(x = yrs.service, 
+           y = salary, 
+           color = rank,
+           size = yrs.since.phd)) + # adding continuous variable (yrs. since phd)
+  geom_point(alpha = .5) + 
+  scale_color_viridis(discrete = TRUE, option = "D") +
+  labs(title = "Academic salary by rank and years of service",
+       y = "Salary in US dollars", x = "Years of Service")
+
+
+# Only bubble plot - colors RColorBrewer, Dark2
+display.brewer.all()
+
+ggplot(Salaries, 
+       aes(x = yrs.service, 
+           y = salary, 
+           color = rank,
+           size = yrs.since.phd)) + # adding continuous variable (yrs. since phd)
+  geom_point(alpha = .5) + 
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Academic salary by rank and years of service",
+       y = "Salary in US dollars", x = "Years of Service")
 ```
 
 
