@@ -123,8 +123,11 @@ data$business_service_activity <- as.factor(data$business_service_activity)
 data$case_type <- as.factor(data$case_type)
 data$account <- as.factor(data$account)
 data$contact <- as.factor(data$contact)
-sapply(data, class)
+data$openedToClosed <- as.numeric(difftime(data$closed, data$opened, units = "hours"))
+# add column created by cleaned. When cretad_by is admin, then it is system, when created_by ends witch @unico.ch then it is unico, otherwise it is user
+data$created_by_cleaned <- as.factor(ifelse(data$created_by == "admin", "System", ifelse(grepl("@unico.ch", data$created_by), "Unico", "User")))
 ```
+
 ```{r save}
 # Save the data
 write.csv(data, "Data/data.csv",row.names = FALSE)
@@ -174,64 +177,18 @@ ggplot(data = data, mapping = aes(x = data$time_worked, y = data$reassignment_co
 ```{r}  
 library(viridis)   
 library(RColorBrewer)
-# We restart with the salaries dataset 
-data(Salaries, package="carData")
-str(Salaries)
-head(Salaries)
-summary(Salaries)
-# ------------------------------ Grouping -------------------------- #
-# Let's plot salaries and the years of service
-ggplot(data, 
-       aes(x = data$time_worked, 
-           y = data$)) +
-  geom_point() + 
-  labs(title = "Academic salary by years of service")
 
-
-
-# In the next step, let's try to add further information to the scatter plot
-ggplot(Salaries, aes(x = yrs.service, 
-                     y = salary, 
-                     color = sex)) +
-  geom_point() +
-  labs(title = "Academic salary by sex and years of service") 
-
-
-
-ggplot(Salaries, 
-       aes(x = yrs.service, 
-            y = salary, 
-            color = rank,
-            shape = sex)) +     # adding sex 
-  geom_point(size = 3, 
-             alpha = .6) +
-  labs(title = "Academic salary by rank, sex, and years since degree")
-
-
-# Only bubble plot - colors with viridis  
-ggplot(Salaries, 
-       aes(x = yrs.service, 
-           y = salary, 
-           color = rank,
-           size = yrs.since.phd)) + # adding continuous variable (yrs. since phd)
-  geom_point(alpha = .5) + 
-  scale_color_viridis(discrete = TRUE, option = "D") +
-  labs(title = "Academic salary by rank and years of service",
-       y = "Salary in US dollars", x = "Years of Service")
-
-
-# Only bubble plot - colors RColorBrewer, Dark2
 display.brewer.all()
 
-ggplot(Salaries, 
-       aes(x = yrs.service, 
-           y = salary, 
-           color = rank,
-           size = yrs.since.phd)) + # adding continuous variable (yrs. since phd)
+ggplot(data %>% filter(time_worked < 400000) %>% filter(reassignment_count < 5) %>% filter(business_percentage < 100) %>% filter(time_worked > 0), 
+       aes(x = time_worked, 
+           y = openedToClosed, 
+           color = impact,
+           size = business_percentage)) + # adding continuous variable (yrs. since phd)
   geom_point(alpha = .5) + 
   scale_color_brewer(palette = "Dark2") +
-  labs(title = "Academic salary by rank and years of service",
-       y = "Salary in US dollars", x = "Years of Service")
+  labs(title = "Time Worked by Account and OpenedToClosed",
+       y = "Opened to Closed (Hours)", x = "Time Worked (Hours)")
 ```
 
 
