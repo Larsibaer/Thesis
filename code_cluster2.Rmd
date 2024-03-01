@@ -1,0 +1,275 @@
+---
+title: "Thesis - Clustering"
+author: "Lars Wenger"
+date: "2024-02-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r libraries}
+library(ggplot2)
+library(dplyr)
+library(cluster)
+library(factoextra)
+library(mlbench)
+library(tidyr)
+library(readr)
+library(FactoMineR)
+library(dbscan)
+library(fpc)
+options(scipen=999)
+
+```
+```{r import}
+## Import data
+# We set the working directory and we call the data that we are going to use. Please import the csv file.
+rm(list=ls())
+
+set.seed(7)
+
+setwd("C:/Thesis")
+#read json file
+cases_data <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))
+data <- cases_data # We make a copy from the original dataset and work on the copy
+
+```
+```{r check}
+# Take specific STRUCTUREED columns how are interesting and remove all NA's
+data <- na.omit(select(data, number, case_type, account, created_by_group, business_service, assignment_group, auto_close, impact, priority, urgency, sla_has_breached, case_cause, resolution_code, reassignment_count, time_worked, openedToClosed))
+```
+
+```{r cleaning}
+#Remove all rows, where account, Busienss Service and created_by is less than 100 time in the dataset
+data <- data %>% group_by(account) %>% filter(n() > 100)
+data <- data %>% group_by(business_service) %>% filter(n() > 100)
+```
+
+```{r,echo=FALSE}
+outlier <- function(x){
+  quantiles <- quantile(x, c(.05, .95))
+  x[x < quantiles[1]] <- quantiles[1]
+  x[x > quantiles[2]] <- quantiles[2]
+  x
+}   
+```
+
+In the next step, we apply the outlier function. For this, we use the map_df function. This allows us to apply a function to each element of a list or atomic vector.
+
+```{r, echo=FALSE}
+
+#Use function outlier for the dataset
+data['reassignment_count'] <- map_df(data['reassignment_count'], outlier)
+data['time_worked'] <- map_df(data['time_worked'], outlier)
+data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
+
+```
+
+```{r, echo=FALSE}
+# Let's check our dependent variables
+ggplot(data, aes(x = reassignment_count)) + 
+  geom_histogram(fill="#6ebb83", color = "black") +
+  theme(legend.position="none")+
+  labs(title = "Histogram of the reassignment count",
+       y = "Count", x = "Reassignemt Count")
+
+ggplot(data, aes(x = time_worked)) + 
+  geom_histogram(fill="#6ebb83", color = "black") +
+    labs(title = "Histogram of the Time Worked",
+       y = "Count", x = "Time Worked (Hours)") +
+  theme(legend.position="none")
+
+ggplot(data, aes(x = openedToClosed)) + 
+  geom_histogram(fill="#6ebb83", color = "black") +
+    labs(title = "Histogram of the Opened to Closed Time",
+       y = "Count", x = "Opended to Closed (Hours)") +
+  theme(legend.position="none")
+```
+```{r scaling}
+
+data_scaled <- cbind(data[1:13], scale(data[14:16]))
+```
+
+```{r oneHotEncoding}
+one_hot_encode <- function(df, columns) {
+  # Ensure 'columns' is a character vector
+  if(!is.character(columns)) {
+    stop("columns argument must be a character vector specifying column names to encode")
+  }
+  
+  # Check if specified columns exist in the dataframe
+  if(!all(columns %in% names(df))) {
+    stop("Not all specified columns exist in the dataframe")
+  }
+  
+  # Start with the original dataframe minus the columns to be encoded
+  result_df <- df[, !(names(df) %in% columns)]
+  
+  # Iterate over the columns and perform one-hot encoding
+  for(column in columns) {
+    # Create a temporary dataframe to avoid altering the original data
+    temp_df <- data.frame(df[[column]], stringsAsFactors = FALSE)
+    colnames(temp_df) <- column
+    
+    # Apply model.matrix(), remove intercept column, and convert to dataframe
+    encoded_matrix <- model.matrix(~ . - 1, data = temp_df)
+    encoded_df <- data.frame(encoded_matrix)
+    
+    # Rename encoded columns to include original column name for clarity
+    colnames(encoded_df) <- gsub("X", column, colnames(encoded_df))
+    
+    # Combine with the result dataframe
+    result_df <- cbind(result_df, encoded_df)
+  }
+  
+  return(cbind(df[1], result_df))
+}
+# One-hot encoding
+encoded_df_withCaseNumber <- one_hot_encode(data_scaled, c("case_type", "account", "created_by_group", "business_service", "assignment_group", "auto_close", "impact", "priority", "urgency", "sla_has_breached", "case_cause", "resolution_code"))
+
+encoded_df <- encoded_df_withCaseNumber %>% select(-number)
+```
+
+```{r}
+# ----------------- K-means Clustering ------------------- #
+# Now we are ready for running the k-means algorithm
+set.seed(333) 
+
+# Run k-means analysis
+# To start, we set k=3. This means we want to divide the data into 3 
+# groups.
+k <- 3
+kmeans_model <- kmeans(encoded_df, centers = k)
+
+# Summary of k-means model.
+# Note on fit: Ideally you want a clustering that has the properties of internal 
+# cohesion and external separation, i.e. the between_SS/total_SS ratio should 
+# approach 1.
+
+# Let's evaluate this more formally. We start with the elbow method.
+# Let's create and empty data frame that will contain 2 columns: one, will be 
+# k that will contain the values from 1 to 15 and second will be the total_withinss 
+# which will be empty. 
+elbow_data <- data.frame(
+  k = 1:15,
+  total_withinss = numeric(15)
+)
+
+# Next, for each value for k (that can go from 1 to 15), we run the k-means algorithm
+# with the specific number of clusters and we extract the total within-cluster sum of squares 
+# for each into our elbow_data object.
+for(i in 1:15) {
+  set.seed(333)
+  km <- kmeans(encoded_df, centers = i)
+  elbow_data[i, "total_withinss"] <- km$tot.withinss
+}
+
+# We plot the elbow method.
+ggplot(elbow_data, aes(x = k, y = total_withinss)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_x_continuous(breaks = seq(1, 15, 1)) +
+  labs(title = "Elbow Method", x = "Number of Clusters", 
+       y = "Total Within-Cluster Sum of Squares") +
+  theme_minimal()
+
+
+# Let's plot the clusters in 2D. For this we will need to run a PCA.
+```
+### Which number of clusters would you choose?
+
+I choose 6. 
+
+```{r, message=FALSE}
+# Let's run the k-means with the desired number of clusters 
+k <- 6
+set.seed(333)
+kmeans_model <- kmeans(encoded_df, centers = k)
+
+# Run PCA and extract principal components
+pca_fit <- PCA(encoded_df, graph = FALSE)
+pc1 <- pca_fit$ind$coord[, 1]
+pc2 <- pca_fit$ind$coord[, 2]
+
+# Create data frame with cluster assignments and principal components
+cluster_data <- data.frame(cluster = as.factor(kmeans_model$cluster), pc1, pc2)
+
+# # Let's visualize this: 
+# data_sum <- aggregate(data, by=list(cluster=kmeans_model$cluster), mean)
+# 
+# # Reshape the data to long format
+# df_long_2 <- data_sum %>%
+#   pivot_longer(cols = c("Coef for open", "Coef for high", "Coef for low", "Coef for volume", "Coef for change within day", "Coef for change from prev day"), 
+#                names_to = "variable", values_to = "mean_value")
+# 
+# 
+# # Plot the mean values by cluster and variable
+# ggplot(encoded_df, aes(x = cluster, y = mean_value, fill = factor(variable))) +
+#   geom_col(position = "dodge") +
+#   scale_fill_discrete(name = "Variables") +
+#   labs(title = "Mean Values by Cluster and Variable", x = "Clusters", y = "Mean Value")
+
+# Assign each observation to a cluster 
+data_scaled$cluster <- as.factor(kmeans_model$cluster) 
+# Count the number of stocks in each cluster 
+table(data_scaled$cluster) 
+# Choose a subset of stocks from each cluster 
+data_subset <- data_scaled %>% 
+  group_by(cluster) %>%
+  slice_head(n = 2) %>% 
+  ungroup()
+
+```
+
+```{r}
+# ----------------- PCA Analysis ------------------- #
+# Run PCA and extract principal components
+pca_fit <- PCA(encoded_df, graph = FALSE)
+pc1 <- pca_fit$ind$coord[, 1]
+pc2 <- pca_fit$ind$coord[, 2]
+
+# Let's check the summary.
+# Remember: the PCs are linear combinations of the original variables. 
+summary(pc1)
+summary(pc2)
+
+# Let's evaluate the PCA
+# One of the attributes of the pca_fit object is eig. 
+# This is what tell us the eigenvalues of the principal components.
+# Eigenvalues are a measure of the amount of variance explained by each principal 
+# component. 
+pca_fit$eig
+
+# Cumulative variance explained by first two principal components. 
+# You can read it from pca_fit$eig or run the next two lines. 
+sum_PCA_2 <- pca_fit$eig[2, 3]
+cat("Cumulative variance explained by PC1 and PC2:", round(sum_PCA_2, 2), "\n")
+sum_PCA_3 <- pca_fit$eig[3, 3]
+cat("Cumulative variance explained by PC1 until PC3:", round(sum_PCA_3, 2), "\n")
+
+# Variable contribution in PC1 and PC2
+# The pca_fit$var$contrib provides a way to understand how the original variables 
+# contribute to the principal components, which can help with interpretation 
+# and understanding of the PCA results.
+
+# Specifically, the var$contrib: contains the contributions (in percentage) of 
+# the variables to the principal components. 
+pca_fit$var$contrib
+
+# Create scatter plot with points colored by cluster assignment
+ggplot(cluster_data, aes(pc1, pc2, color = cluster, alpha=I(0.2))) +
+  geom_point() +
+  labs(color = "Cluster") +
+  theme_minimal()
+
+ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
+  geom_bin2d(mapping = aes(x = pc1, y = pc2, color = cluster)) +
+  labs(color = "Cluster") +
+  theme_minimal()
+```
+```{r save}
+final_data <- merge(data, data_scaled[c('number','cluster')], by = "number", all.x = FALSE)
+# Save the data
+write.csv(final_data, "Data/data_withclusters.csv",row.names = FALSE)
+```
