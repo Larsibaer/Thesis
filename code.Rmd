@@ -125,7 +125,7 @@ data$account <- as.factor(data$account)
 data$contact <- as.factor(data$contact)
 data$openedToClosed <- as.numeric(difftime(data$closed, data$opened, units = "hours"))
 # add column created by cleaned. When cretad_by is admin, then it is system, when created_by ends witch @unico.ch then it is unico, otherwise it is user
-data$created_by_cleaned <- as.factor(ifelse(data$created_by == "admin", "System", ifelse(grepl("@unico.ch", data$created_by), "Unico", "User")))
+data$created_by_group <- as.factor(ifelse(data$created_by == "admin", "System", ifelse(grepl("@unico.ch", data$created_by), "Unico", "User")))
 ```
 
 ```{r save}
@@ -137,12 +137,8 @@ write.csv(data, "Data/data.csv",row.names = FALSE)
 
 
 
-```{r data}
-# Let's run basic check on the dataset 
-summary(data)
-str(data)
-
-#PercTable(data$ca_time_worked)
+```{r import2}
+data <- read_csv("Data/data_withclusters.csv")
 ```
 ```{r plots}
 # Filter the top 10 assignment groups of number of cases
@@ -153,6 +149,8 @@ data_assignment_group_top10 <- data %>%
   head(10)
 
 # Filter data, where assignment group is in the top 10
+
+# Color for another variable
 data_assignment_group <- data %>% 
   filter(assignment_group %in% data_assignment_group_top10$assignment_group)
 
@@ -162,11 +160,14 @@ ggplot(data = data_assignment_group) +
 We see that most Tickets is assigned to the assignment group "Service Desk". Which is the first level of support in the Unico Data AG. 
 
 ```{r}
-ggplot(data = data) +
+ggplot(data = data_assignment_group) +
   geom_point(
-    mapping = aes(x = time_worked, y = reassignment_count, color = assignment_group)) +
-  geom_smooth(mapping = aes(x = time_worked, y = reassignment_count)) +
-  facet_wrap(~ assignment_group, nrow = 5)
+    mapping = aes(x = openedToClosed, y = reassignment_count, color = cluster)) +
+  geom_smooth(mapping = aes(x = openedToClosed, y = reassignment_count))
+
+ggplot(data = data_assignment_group, mapping = aes(x = openedToClosed, y = reassignment_count)) +
+  geom_boxplot(mapping = aes(group = cut_number(openedToClosed, 10))) +
+  geom_smooth(mapping = aes(x = openedToClosed, y = reassignment_count))
 ```
 ```{r plot}
 ggplot(data = data, mapping = aes(x = data$time_worked, y = data$reassignment_count)) +
@@ -180,15 +181,159 @@ library(RColorBrewer)
 
 display.brewer.all()
 
-ggplot(data %>% filter(time_worked < 400000) %>% filter(reassignment_count < 5) %>% filter(business_percentage < 100) %>% filter(time_worked > 0), 
+
+
+ggplot(data_assignment_group %>% filter(time_worked < 400000) %>% filter(reassignment_count < 5) %>% filter(business_percentage < 100) %>% filter(cluster == 1) %>% filter(assignment_group != "Service Desk 1st Level"), 
        aes(x = time_worked, 
            y = openedToClosed, 
-           color = impact,
-           size = business_percentage)) + # adding continuous variable (yrs. since phd)
+           color = assignment_group,
+           size = business_percentage)) +
   geom_point(alpha = .5) + 
   scale_color_brewer(palette = "Dark2") +
   labs(title = "Time Worked by Account and OpenedToClosed",
        y = "Opened to Closed (Hours)", x = "Time Worked (Hours)")
+
+# Do the same plot as interactiive plot with plotly library
+library(plotly)
+
+
+
+p <- ggplot(data_assignment_group %>% filter(time_worked < 400000) %>% filter(reassignment_count < 5) %>% filter(business_percentage < 100) %>% filter(cluster == 2) %>% filter(assignment_group != "Service Desk 1st Level"), 
+       aes(x = time_worked, 
+           y = openedToClosed, 
+           color = assignment_group,
+           size = business_percentage)) +
+  geom_point(alpha = .5) + 
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Time Worked by Account and OpenedToClosed",
+       y = "Opened to Closed (Hours)", x = "Time Worked (Hours)")
+
+ggplotly(p)
+```
+## Opened To Closed by Assignment Group
+
+We will now look at the opened to closed time by assignment group. We will use a barplot and a boxplot to visualize the data. 
+First Check how the feature is distributed:
+```{r,echo=FALSE}
+#Let's visualize the wage columnns with and without outliers
+data %>%
+  plot_outlier(col="aquamarine3",diagnose_outlier(data['openedToClosed']) %>%
+                 filter(outliers_ratio >= 0.5) %>%          # dplyr
+                 select(variables) %>%
+                 unlist())
+
 ```
 
+### Handle outliers
+
+Since we have already looked at the outlier-distribution above, we think it is better to use the outlierhandling
+
+```{r,echo=FALSE}
+outlier <- function(x){
+  quantiles <- quantile(x, c(.05, .95))
+  x[x < quantiles[1]] <- quantiles[1]
+  x[x > quantiles[2]] <- quantiles[2]
+  x
+}   
+```
+
+In the next step, we apply the outlier function. For this, we use the map_df function. This allows us to apply a function to each element of a list or atomic vector.
+
+```{r, echo=FALSE}
+
+#Use function outlier for the dataset
+data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
+
+#Save to later use on 
+data_outliers10 <- data
+```
+
+Let's look at the distribution of the OpenedToClosed now:
+
+```{r, echo=FALSE}
+# Let's check our dependent variable "wage"
+ggplot(data_outliers10, aes(x = openedToClosed)) + 
+  geom_histogram(fill="aquamarine3", color = "black") +
+  labs(title = "Histogram of the wages for option 1") +
+  theme(legend.position="none")
+```
+
+### Barplot and Boxplot
+```{r barplot}
+# Barplot of the mean of opendedToClosed by assignment group
+# Order ggplot increasing by the mean of openedToClosed
+
+
+ggplot(data = data_assignment_group, 
+       aes(x = assignment_group, 
+           y = openedToClosed, 
+           fill = assignment_group)) +
+  geom_bar(stat = "summary") +
+  labs(title = "Mean of Opened to Closed by Assignment Group",
+       y = "Mean of Opened to Closed (Hours)", x = "Assignment Group") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Same plot as Boxplot
+ggplot(data = data_assignment_group, 
+       aes(x = assignment_group, 
+           y = openedToClosed, 
+           fill = assignment_group)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Opened to Closed by Assignment Group",
+       y = "Opened to Closed (Hours)", x = "Assignment Group") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+library(dplyr)
+library(tidyverse)
+#transform the data to tibble
+
+data <- as_tibble(data)
+group <- data %>%
+  group_by(assignment_group) %>%
+  summarize(
+    totalTime = mean(openedToClosed, na.rm = TRUE),
+    timeWorked = mean(time_worked, na.rm = TRUE),
+    n = n()
+  )
+
+# add labs to code
+ggplot(group, aes(totalTime, fct_reorder(assignment_group, totalTime))) +
+  geom_point() +
+  labs(title = "Total Time by Assignment Group",
+       y = "Assignment Group", x = "Total Time (Hours)")
+```
+## Time Plots
+
+### Overview
+```{r}
+data %>%
+  ggplot(aes(opened)) +
+  geom_freqpoly(binwidth = 86400) # 86400 seconds = 1 day
+```
+```{r}
+data %>%
+  filter(opened > "2023-01-01") %>%
+  ggplot() +
+  geom_freqpoly(aes(x = opened, color = "Opened"), binwidth = 86400) +
+  geom_freqpoly(aes(x = closed, color = "Closed"), binwidth = 86400) +
+  scale_color_manual(values = c("Opened" = "blue", "Closed" = "red")) +
+  labs(title = "Frequency of Opened and Closed Cases Over Time",
+       x = "Date",
+       y = "Frequency",
+       color = "Case Status") +
+  coord_cartesian(ylim = c(0, 100))
+
+```
+
+### During the week
+```{r}
+library(tidyverse)
+library(lubridate)
+
+data %>%
+  mutate(wday = lubridate::wday(opened, label = TRUE, abbr = FALSE)) %>%
+  ggplot(aes(x = wday)) +
+    geom_bar()
+```
 

@@ -36,7 +36,7 @@ data <- cases_data # We make a copy from the original dataset and work on the co
 
 ```
 ```{r check}
-data <- na.omit(select(data, case_type, account, created_by, business_service, assignment_group, auto_close, time_worked, reassignment_count, impact, priority, urgency, openedToClosed, created_by_cleaned, sla_has_breached, number))
+data <- na.omit(select(data, case_type, account, created_by, business_service, assignment_group, auto_close, time_worked, reassignment_count, impact, priority, urgency, openedToClosed, created_by_group, sla_has_breached, number))
 ```
 
 ```{r scaling}
@@ -86,7 +86,7 @@ one_hot_encode <- function(df, columns) {
   return(cbind(df[1], result_df))
 }
 # One-hot encoding
-encoded_df_withCaseNumber <- one_hot_encode(data, c("case_type", "account", "created_by", "business_service", "assignment_group", "auto_close", "impact", "priority", "urgency", "created_by_cleaned", "sla_has_breached"))
+encoded_df_withCaseNumber <- one_hot_encode(data, c("case_type", "account", "created_by", "business_service", "assignment_group", "auto_close", "impact", "priority", "urgency", "created_by_group", "sla_has_breached"))
 
 encoded_df <- encoded_df_withCaseNumber %>% select(-number)
 ```
@@ -220,6 +220,11 @@ pca_fit$var$contrib
 # Create scatter plot with points colored by cluster assignment
 ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
   geom_point() +
+  labs(color = "Cluster") +
+  theme_minimal()
+
+ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
+  geom_bin2d(mapping = aes(x = pc1, y = pc2, color = cluster)) +
   labs(color = "Cluster") +
   theme_minimal()
 ```
