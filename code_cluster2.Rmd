@@ -19,6 +19,8 @@ library(readr)
 library(FactoMineR)
 library(dbscan)
 library(fpc)
+library(data.table)
+library(tidyverse)
 options(scipen=999)
 
 ```
@@ -37,13 +39,16 @@ data <- cases_data # We make a copy from the original dataset and work on the co
 ```
 ```{r check}
 # Take specific STRUCTUREED columns how are interesting and remove all NA's
-data <- na.omit(select(data, number, case_type, account, created_by_group, business_service, assignment_group, auto_close, impact, priority, urgency, sla_has_breached, case_cause, resolution_code, reassignment_count, time_worked, openedToClosed))
+data <- na.omit(select(data, number, account, created_by_group, business_service, assignment_group, auto_close, impact, priority, urgency, sla_has_breached, case_cause, resolution_code, reassignment_count, time_worked, openedToClosed, business_percentage))
 ```
 
 ```{r cleaning}
 #Remove all rows, where account, Busienss Service and created_by is less than 100 time in the dataset
 data <- data %>% group_by(account) %>% filter(n() > 100)
 data <- data %>% group_by(business_service) %>% filter(n() > 100)
+data <- data %>% group_by(assignment_group) %>% filter(n() > 20)
+#Verzicht auf Case Type, da ich sowieso nur Troubles anschaue
+#data <- data %>% filter(case_type == 'Trouble')
 ```
 
 ```{r,echo=FALSE}
@@ -63,7 +68,7 @@ In the next step, we apply the outlier function. For this, we use the map_df fun
 data['reassignment_count'] <- map_df(data['reassignment_count'], outlier)
 data['time_worked'] <- map_df(data['time_worked'], outlier)
 data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
-
+data['business_percentage'] <- map_df(data['business_percentage'], outlier)
 ```
 
 ```{r, echo=FALSE}
@@ -85,10 +90,23 @@ ggplot(data, aes(x = openedToClosed)) +
     labs(title = "Histogram of the Opened to Closed Time",
        y = "Count", x = "Opended to Closed (Hours)") +
   theme(legend.position="none")
-```
-```{r scaling}
 
-data_scaled <- cbind(data[1:13], scale(data[14:16]))
+ggplot(data, aes(x = business_percentage)) + 
+  geom_histogram(fill="#6ebb83", color = "black") +
+    labs(title = "Histogram of SLA internal",
+       y = "Count", x = "SLA Percentage") +
+  theme(legend.position="none")
+```
+```{r tfidf}
+tfidf_1 <- read_csv("Data/VectorizedText_description.csv")
+tfidf_2 <- read_csv("Data/VectorizedText_cause.csv")
+tfidf_3 <- read_csv("Data/VectorizedText_close_notes.csv")
+data_tfidf <- cbind(data, tfidf_1, tfidf_2, tfidf_3)
+```
+
+```{r scaling}
+n <- ncol(data_tfidf)
+data_scaled <- cbind(data_tfidf[1:13], scale(data_tfidf[14:n]))
 ```
 
 ```{r oneHotEncoding}
@@ -126,15 +144,17 @@ one_hot_encode <- function(df, columns) {
   return(cbind(df[1], result_df))
 }
 # One-hot encoding
-encoded_df_withCaseNumber <- one_hot_encode(data_scaled, c("case_type", "account", "created_by_group", "business_service", "assignment_group", "auto_close", "impact", "priority", "urgency", "sla_has_breached", "case_cause", "resolution_code"))
+encoded_df_withCaseNumber <- one_hot_encode(data_scaled, c("account", "created_by_group", "business_service", "assignment_group", "auto_close", "impact", "priority", "urgency", "sla_has_breached", "case_cause", "resolution_code"))
 
 encoded_df <- encoded_df_withCaseNumber %>% select(-number)
 ```
 
+
+
 ```{r}
 # ----------------- K-means Clustering ------------------- #
 # Now we are ready for running the k-means algorithm
-set.seed(333) 
+set.seed(111) 
 
 # Run k-means analysis
 # To start, we set k=3. This means we want to divide the data into 3 
@@ -183,8 +203,8 @@ I choose 6.
 
 ```{r, message=FALSE}
 # Let's run the k-means with the desired number of clusters 
-k <- 6
-set.seed(333)
+k <- 5
+set.seed(888)
 kmeans_model <- kmeans(encoded_df, centers = k)
 
 # Run PCA and extract principal components
@@ -258,18 +278,84 @@ cat("Cumulative variance explained by PC1 until PC3:", round(sum_PCA_3, 2), "\n"
 pca_fit$var$contrib
 
 # Create scatter plot with points colored by cluster assignment
-ggplot(cluster_data, aes(pc1, pc2, color = cluster, alpha=I(0.2))) +
+ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
   geom_point() +
   labs(color = "Cluster") +
   theme_minimal()
 
-ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
-  geom_bin2d(mapping = aes(x = pc1, y = pc2, color = cluster)) +
-  labs(color = "Cluster") +
-  theme_minimal()
 ```
 ```{r save}
+data_new <- merge(data, cases_data[c('number','description', 'cause', 'close_notes')], by = "number", all.x = FALSE)
+write.csv(data_new, "Data/data_new.csv",row.names = FALSE)
 final_data <- merge(data, data_scaled[c('number','cluster')], by = "number", all.x = FALSE)
 # Save the data
 write.csv(final_data, "Data/data_withclusters.csv",row.names = FALSE)
+```
+
+```{r analyzeCluster}
+# Assuming 'data' is your dataset and 'cluster' is the column indicating cluster membership
+final_data$cluster <- as.factor(final_data$cluster) # Ensure the cluster variable is a factor
+
+# Summary statistics for each cluster
+summary_stats <- final_data %>%
+  group_by(cluster) %>%
+  summarise_all(funs(mean = mean(., na.rm = TRUE), sd = sd(., na.rm = TRUE)))
+
+# Boxplots for a variable across clusters
+ggplot(final_data, aes(x = cluster, y = final_data$openedToClosed)) + 
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution of Opened to Closed Across Clusters", y = "Opened to Closed (Hours)", x = "Cluster")
+
+```
+```{r}
+# Assuming 'data' is your dataframe, 'cluster' is the clustering result column, and 'accounts' is the categorical variable
+
+# Create a contingency table for 'accounts' across clusters
+accounts_distribution <- table(final_data$cluster, final_data$assignment_group)
+
+# Print the contingency table
+print(accounts_distribution)
+
+
+# Convert the table to a dataframe for ggplot2
+accounts_df <- as.data.frame(accounts_distribution)
+colnames(accounts_df) <- c("Cluster", "Accounts", "Frequency")
+
+# Plot
+ggplot(accounts_df, aes(x = Cluster, y = Frequency, fill = Accounts)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "Distribution of Accounts Across Clusters",
+       x = "Cluster",
+       y = "Frequency",
+       fill = "Accounts")
+
+```
+```{r different Clusters}
+library(dbscan)
+library(fpc)
+dbscan_data2 <- dbscan(encoded_df, eps = 0.5, MinPts = 50)
+
+# DBScan 
+ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(dbscan_data2[["cluster"]]))) +
+  geom_point() +
+  theme_classic() +
+  labs(title = "DBScan clustering of Blobs data", color = "Clusters")
+```
+
+
+```{r differen Cluster 2}
+library(cluster)
+k = 6
+# Hierarchical clustering with complete linkage
+hier_data2_comp <- hclust(dist(encoded_df), method = "complete")
+clusters_data2_comp <- cutree(hier_data2_comp, k = k)
+
+# Hierarchical clustering with complete linkage
+ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(clusters_data2_comp))) +
+  geom_point() +
+  theme_classic() +
+  labs(title = "Hierarchical Clustering with Complete Linkage of Blobs data", color = "Clusters")
+
 ```

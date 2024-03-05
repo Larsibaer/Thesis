@@ -1,0 +1,253 @@
+---
+title: "Analyze_Clusters"
+author: "Lars Wenger"
+date: "2024-03-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r install}
+# We start by installing the necessary libraries. Make sure to uncomment and run
+# only the libraries which you haven't installed already. 
+#install.packages("DescTools")
+#install.packages("xgboost")
+#install.packages("caret")
+#install.packages("dplyr")
+#install.packages("tidyverse")
+#install.packages("mltools")
+#install.packages("reshape2")
+#install.packages("data.table")
+#install.packages("pracma")
+#install.packages("rsample")
+# install.packages("PRROC")
+# install.packages("e1071")
+# install.packages("dlookr")
+# install.packages("pROC")
+# install.packages("ROCR")
+# install.packages("nnet")
+```
+```{r libraries}
+library(DescTools)
+library(xgboost)
+library(caret)
+library(dplyr)
+library(tidyverse)
+library(mltools)
+library(reshape2)
+library(data.table)
+library(pracma)
+library(rsample)
+library(PRROC)
+library(e1071)
+library(dlookr)
+library(pROC)
+library(ROCR)
+library(nnet)
+library(ggplot2)
+options(scipen=999)
+```
+
+
+```{r import}
+## Import data
+# We set the working directory and we call the data that we are going to use. Please import the csv file.
+rm(list=ls())
+
+set.seed(7)
+
+setwd("C:/Thesis")
+#read json file
+data <- read_csv("Data/data_withclusters.csv")
+data_raw <- data
+data <- data %>% filter(cluster == 1)
+```
+
+```{r plots}
+ggplot(data = data) +
+  geom_bar(mapping = aes(x = assignment_group, fill = account)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+We see that most Tickets is assigned to the assignment group "Service Desk". Which is the first level of support in the Unico Data AG. 
+
+```{r}
+ggplot(data = data) +
+  geom_point(
+    mapping = aes(x = data$time_worked, y = openedToClosed, color = sla_has_breached)) +
+  geom_smooth(mapping = aes(x = time_worked, y = openedToClosed))
+```
+```{r plot}
+ggplot(data = data, mapping = aes(x = data$time_worked, y = data$reassignment_count)) +
+  geom_point(mapping = aes(color = assignment_group, size = data$business_percentage)) +
+  geom_smooth()
+```
+
+```{r}  
+library(viridis)   
+library(RColorBrewer)
+
+display.brewer.all()
+
+
+
+ggplot(data %>% filter(time_worked < 400000) %>% filter(reassignment_count < 5) %>% filter(business_percentage < 100) %>% filter(cluster == 1) %>% filter(assignment_group != "Service Desk 1st Level"), 
+       aes(x = time_worked, 
+           y = openedToClosed, 
+           color = assignment_group,
+           size = business_percentage)) +
+  geom_point(alpha = .5) + 
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Time Worked by Account and OpenedToClosed",
+       y = "Opened to Closed (Hours)", x = "Time Worked (Hours)")
+
+# Do the same plot as interactiive plot with plotly library
+library(plotly)
+
+
+
+p <- ggplot(data %>% filter(time_worked < 400000) %>% filter(reassignment_count < 5) %>% filter(business_percentage < 100) %>% filter(cluster == 2) %>% filter(assignment_group != "Service Desk 1st Level"), 
+       aes(x = time_worked, 
+           y = openedToClosed, 
+           color = assignment_group,
+           size = business_percentage)) +
+  geom_point(alpha = .5) + 
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Time Worked by Account and OpenedToClosed",
+       y = "Opened to Closed (Hours)", x = "Time Worked (Hours)")
+
+ggplotly(p)
+```
+
+Let's look at the distribution of the OpenedToClosed now:
+
+```{r, echo=FALSE}
+# Let's check our dependent variable "wage"
+ggplot(data, aes(x = openedToClosed)) + 
+  geom_histogram(fill="aquamarine3", color = "black") +
+  labs(title = "Histogram of the openedToClosed") +
+  theme(legend.position="none")
+```
+
+### Barplot and Boxplot
+```{r barplot}
+# Barplot of the mean of opendedToClosed by assignment group
+# Order ggplot increasing by the mean of openedToClosed
+
+
+ggplot(data = data, 
+       aes(x = assignment_group, 
+           y = openedToClosed, 
+           fill = priority)) +
+  geom_bar(stat = "summary") +
+  labs(title = "Mean of Opened to Closed by Assignment Group",
+       y = "Mean of Opened to Closed (Hours)", x = "Assignment Group") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Same plot as Boxplot
+ggplot(data = data, 
+       aes(x = assignment_group, 
+           y = openedToClosed)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Opened to Closed by Assignment Group",
+       y = "Opened to Closed (Hours)", x = "Assignment Group") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r barplot}
+# Same for Time Worked
+
+
+ggplot(data = data, 
+       aes(x = assignment_group, 
+           y = time_worked, 
+           fill = priority)) +
+  geom_bar(stat = "summary") +
+  labs(title = "Mean of Opened to Closed by Assignment Group",
+       y = "Mean of Opened to Closed (Hours)", x = "Assignment Group") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Same plot as Boxplot
+ggplot(data = data, 
+       aes(x = assignment_group, 
+           y = time_worked)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Opened to Closed by Assignment Group",
+       y = "Opened to Closed (Hours)", x = "Assignment Group") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+library(dplyr)
+library(tidyverse)
+#transform the data to tibble
+
+data <- as_tibble(data)
+group <- data %>%
+  group_by(assignment_group) %>%
+  summarize(
+    totalTime = mean(openedToClosed, na.rm = TRUE),
+    timeWorked = mean(time_worked, na.rm = TRUE),
+    n = n()
+  )
+
+# add labs to code
+ggplot(group, aes(totalTime, fct_reorder(assignment_group, totalTime))) +
+  geom_point() +
+  labs(title = "Total Time by Assignment Group",
+       y = "Assignment Group", x = "Total Time (Hours)")
+```
+## Time Plots
+
+```{r}
+# Import original dataset
+data_org <- read.csv("Data/sn_customerservice_case_utf8.csv")
+
+#Add Opened and Closed columns to the data
+data <- merge(data, data_org[c('number','opened_at', 'closed_at')], by = "number", all.x = TRUE)
+
+# Transform the opened_at and closed_at to date format
+data <- data %>%
+  mutate(opened_at = as.POSIXct(opened_at, format = "%d-%m-%Y %H:%M:%S"),
+         closed_at = as.POSIXct(closed_at, format = "%d-%m-%Y %H:%M:%S"))
+```
+
+### Overview
+```{r}
+data %>%
+  ggplot(aes(opened_at)) +
+  geom_freqpoly(binwidth = 86400) # 86400 seconds = 1 day
+```
+```{r}
+data %>%
+  filter(opened_at > "2023-01-01") %>%
+  ggplot() +
+  geom_freqpoly(aes(x = opened_at, color = "Opened"), binwidth = 86400) +
+  geom_freqpoly(aes(x = closed_at, color = "Closed"), binwidth = 86400) +
+  scale_color_manual(values = c("Opened" = "blue", "Closed" = "red")) +
+  labs(title = "Frequency of Opened and Closed Cases Over Time",
+       x = "Date",
+       y = "Frequency",
+       color = "Case Status") +
+  coord_cartesian(ylim = c(0, 100))
+
+```
+
+### During the week
+```{r}
+library(tidyverse)
+library(lubridate)
+
+data %>%
+  mutate(wday = lubridate::wday(opened_at, label = TRUE, abbr = FALSE)) %>%
+  ggplot(aes(x = wday)) +
+    geom_bar()
+```
+```{r}
+ggplot(data, aes(x = business_percentage)) + 
+  geom_histogram(fill="#6ebb83", color = "black") +
+    labs(title = "Histogram of SLA internal",
+       y = "Count", x = "SLA Percentage") +
+  theme(legend.position="none")
+```
+
