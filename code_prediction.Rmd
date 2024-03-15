@@ -1,0 +1,362 @@
+---
+title: "Thesis"
+author: "Lars Wenger"
+date: "2024-05-21"
+output:
+  html_document:
+    toc: yes
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Table of content {.tabset}
+
+## Preparations
+
+
+### Import Modules
+```{r, include=FALSE}
+#install.packages("readr")
+#install.packages("dplyr")
+#install.packages("dlookr")
+#install.packages("naniar")
+#install.packages("UpSetR")
+#install.packages("ggplot2")
+#install.packages("tidyr")
+#install.packages("mice")
+#install.packages("purrr")
+#install.packages("scales")
+
+library(readr)
+library(dplyr)
+library(dlookr)
+library(naniar)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(Boruta)
+library(DescTools)
+library(data.table)
+library(h2o)
+
+```
+
+
+### Import Data
+```{r}
+data <- read_csv("Data/encoded_df.csv")
+data_raw <- data
+set.seed(8)
+```
+
+## Analyse Data
+
+```{r}
+overview(data)
+summary(data)
+```
+
+Let's look at the distribution of the wage now:
+
+```{r, echo=FALSE}
+# Let's check our dependent variable "wage"
+ggplot(data, aes(x = openedToClosed)) + 
+  geom_histogram(fill="aquamarine3", color = "black") +
+  labs(title = "Histogram of the wages for option 2") +
+  theme(legend.position="none")
+```
+
+#### Boruta
+Here we see the first Boruta results. 
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+# test_data <- data
+# boruta_output <- Boruta(openedToClosed~., data = test_data, doTrace=2)
+# boruta_signif <- getSelectedAttributes(boruta_output, withTentative = TRUE)
+# print(boruta_signif)
+```
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+# plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance") 
+```
+```{r}
+#save boruta_signif as csv
+#write.csv(boruta_signif, "Data/boruta_signif.csv")
+boruta_signif <- read_csv("Data/boruta_signif.csv")
+```
+
+
+Since it was not finished after one run, we now create a subset only with the remaining 63 features.
+The 63 features are:
+ [1] "reassignment_count"                                                                                
+ [2] "time_worked"                                                                                       
+ [3] "business_percentage"                                                                               
+ [4] "description_vdi"                                                                                   
+ [5] "description_funktioniert"                                                                          
+ [6] "description_desktop"                                                                               
+ [7] "description_fehlermeldung"                                                                         
+ [8] "description_anmelden"                                                                              
+ [9] "description_citrix"                                                                                
+[10] "description_gestartet"                                                                             
+[11] "description_gemeldet"                                                                              
+[12] "description_problem"                                                                               
+[13] "description_starten"                                                                               
+[14] "description_passwort"                                                                              
+[15] "description_probleme"                                                                              
+[16] "description_session"                                                                               
+[17] "description_angerufen"                                                                             
+[18] "description_gesperrt"                                                                              
+[19] "description_name"                                                                                  
+[20] "cause_vdi"                                                                                         
+[21] "cause_unbekannt"                                                                                   
+[22] "cause_citrix"                                                                                      
+[23] "cause_session"                                                                                     
+[24] "cause_gesperrt"                                                                                    
+[25] "cause_fehler"                                                                                      
+[26] "cause_funktioniert"                                                                                
+[27] "cause_blockierte"                                                                                  
+[28] "cause_konto"                                                                                       
+[29] "cause_vista"                                                                                       
+[30] "cause_account"                                                                                     
+[31] "cause_update"                                                                                      
+[32] "close_notes_neu"                                                                                   
+[33] "close_notes_gel"                                                                                   
+[34] "close_notes_problem"                                                                               
+[35] "close_notes_vdi"                                                                                   
+[36] "close_notes_gestartet"                                                                             
+[37] "close_notes_funktioniert"                                                                          
+[38] "close_notes_citrix"                                                                                
+[39] "close_notes_geschlossen"                                                                           
+[40] "close_notes_login"                                                                                 
+[41] "close_notes_passwort"                                                                              
+[42] "close_notes_entsperrt"                                                                             
+[43] "close_notes_server"                                                                                
+[44] "close_notes_session"                                                                               
+[45] "close_notes_desktop"                                                                               
+[46] "close_notes_konto"                                                                                 
+[47] "close_notes_gewohnt"                                                                               
+[48] "close_notes_neustart"                                                                              
+[49] "close_notes_workspace"                                                                             
+[50] "close_notes_ckgesetzt"                                                                             
+[51] "close_notes_case"                                                                                  
+[52] "close_notes_app"                                                                                   
+[53] "accountJordi.AG"                                                                                   
+[54] "accountKlinik.SGM.Langenthal"                                                                      
+[55] "accountPathé.Romandie.Sàrl...Genève"                                                               
+[56] "accountSaphir.Group.Networks.AG"                                                                   
+[57] "accountSiloah.AG"                                                                                  
+[58] "accountWohn..und.Pflegeheim.Utzigen"                                                               
+[59] "created_by_groupUnico"                                                                             
+[60] "created_by_groupUser"                                                                              
+[61] "business_serviceApplikation"                                                                       
+[62] "business_serviceHosted.Desktop"                                                                    
+[63] "business_serviceNo.Business.Service...only.best.effort.service"                                    
+[64] "business_serviceÜbrige.Leistungen.Managed.Workplace"                                               
+[65] "business_serviceÜbrige.Störungen.und.Anfragen..no.Service."                                        
+[66] "assignment_groupPending...Customers"                                                               
+[67] "assignment_groupPublic.Cloud"                                                                      
+[68] "assignment_groupService.Desk.1st.Level"                                                            
+[69] "assignment_groupService.Desk.2nd.Level"                                                            
+[70] "assignment_groupSquad.Server"                                                                      
+[71] "assignment_groupVorortsupport.Siloah"                                                              
+[72] "auto_closeFALSE"                                                                                   
+[73] "auto_closeTRUE"                                                                                    
+[74] "impact1...High"                                                                                    
+[75] "impact2...Medium"                                                                                  
+[76] "impact3...Low"                                                                                     
+[77] "priority1...Critical"                                                                              
+[78] "priority2...High"                                                                                  
+[79] "priority3...Moderate"                                                                              
+[80] "priority4...Low"                                                                                   
+[81] "urgency1...High"                                                                                   
+[82] "urgency2...Medium"                                                                                 
+[83] "urgency3...Low"                                                                                    
+[84] "sla_has_breachedFALSE"                                                                             
+[85] "sla_has_breachedTRUE"                                                                              
+[86] "case_causeCustomer...incorrect.handling"                                                           
+[87] "case_causeCustomer...Product.error.in.software.or.hardware..if.NOT.business.service."              
+[88] "case_causecustomer_fault"                                                                          
+[89] "case_causeUnico...Product.error.in.software.or.hardware..please.provide.info.in.cause.description."
+[90] "case_causeunico_fault"                                                                             
+[91] "resolution_codeInconclusive...Cannot.reproduce"                                                    
+[92] "resolution_codeSolved...Fixed.by.closing.related.PRB"                                              
+[93] "resolution_codeSolved...Fixed.by.Support.Guidance.provided"                                        
+[94] "resolution_codeSolved...Workaround.provided.based.on.open.PRB"                                     
+[95] "resolution_codeSolved.by.Customer"                                                                 
+[96] "resolution_codeVoided.Canceled"      
+
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+#create new dataframe based on boruta output
+#data <- data[,c(boruta_signif)]
+
+#Create new dataframe based on boruta dataframe
+data <- data[,c(boruta_signif$x)]
+
+#remove column sla_has_breachedFALSE and sla_has_breachedTRUE
+data <- data[,-c(data$sla_has_breachedFALSE,data$sla_has_breachedTRUE)]
+
+
+
+#Add openedToClosed as not scaled to data
+data_full <- read_csv("Data/data_new.csv")
+data$openedToClosed <- data_full$openedToClosed
+```
+
+with this output we see, that all variables have an importance. So we have our final features. We these we can build our model.
+
+## ML part
+
+### Find best ML
+
+We use H20 AutoML to get the best ML-technique. It creates different machine learning algorithms, and compares them automatically.
+
+```{r H20Cluster} 
+
+# Installing & initializing H20. In case you have past installations, you should run 
+# lines 37-44. If this is the first time installing, you can only run lines 43-44.
+#if ("package:h2o" %in% search()) { detach("package:h2o", unload=TRUE) }
+#if ("h2o" %in% rownames(installed.packages())) { remove.packages("h2o") }
+pkgs <- c("RCurl","jsonlite")
+for (pkg in pkgs) {
+  if (! (pkg %in% rownames(installed.packages()))) { install.packages(pkg) }
+}
+#install.packages("h2o", type="source", repos=(c("http://h2o-release.s3.amazonaws.com/h2o/latest_stable_R")))
+
+# Initialize H2O cluster
+h2o.init()
+
+
+# Specify the column containing the dependent feature
+dep_var <- "openedToClosed"
+
+
+# Identify the categorical variables in the dataset
+cat_cols <- c()
+for (col in names(data)) {
+  if (class(data[[col]]) == "factor" | typeof(data[[col]]) == "character") {
+    cat_cols <- c(cat_cols, col)
+  }
+}
+
+# Convert the categorical variables to factors
+data[cat_cols] <- lapply(data[cat_cols], factor)
+
+
+df <- as.h2o(data)
+
+
+# Split dataset into training and test sets
+set.seed(8)
+splits <- h2o.splitFrame(df, ratios = c(0.8))
+train <- splits[[1]]
+test <- splits[[2]]
+#test <- h2o.importFile("our_data.csv")
+#h2o.importFile("our_data.csv")
+#our_data <- read.csv("our_data.csv")
+
+```
+
+# Run AutoML for outliers10
+
+```{r name=automl}
+automl <- h2o.automl(
+  x = setdiff(colnames(df), dep_var), # independent variables
+  y = dep_var, # dependent variable
+  training_frame = train,
+  max_runtime_secs = 600, # maximum time in seconds for AutoML to run
+  seed = 12 # set seed for reproducibility
+)
+
+
+  # View leaderboard of models generated by AutoML
+lb <- automl@leaderboard
+print(lb, n = nrow(lb)) 
+```
+
+We see that the best model which is not a Stacked Ensemble is a GBM model. The Gradient Boosting Machine (GBM) is a machine learning model that combines multiple weak prediction models, typically decision trees, to create a strong predictive model. It does this by iteratively fitting new models to the residuals of the previous models, effectively focusing on the mistakes made by the previous models and minimizing them in subsequent iterations. The final prediction is obtained by aggregating the predictions of all the models, with each model assigned a weight based on its performance.
+
+
+We see that the RMSE here is 27'284$ and so worse to the outliers 10% with 21'106$, so we use the better model with lower RMSE.
+
+Let's have a look at the best of those GMB models.
+
+```{r}
+# Find the best performing model per RMSE criteria and explore it.
+best_RMSE <- h2o.get_best_model(automl, criterion = "RMSE", algorithm = "GBM")   # Best model per the RSME indicator. 
+best_RMSE                                                    # Let's explore the best perfroming model 
+```
+
+It has 80 trees, interesting is the RMSE, which is still 21'095 dollar which means, that every output has a deviation of +/- 21'095$ which is not that great for predicting wage. 
+Now we predict our salaries(Abishan, Josua, Lars & Luca):
+
+```{r, echo=FALSE}
+# Predictions and performance on our test sample. 
+# Obtain the predictions for our test subset
+pred_best_RMSE <- h2o.predict(best_RMSE, test)
+predictions <- as.data.table(pred_best_RMSE)
+predictions
+
+row1 <- h2o.explain_row(best_RMSE, test, row_index = 1)
+row1$shap_explain_row$plots
+#explain the model
+h2o.explain(best_RMSE, test)
+```
+
+
+## Future Salaries
+Now we look deeper on every salary.
+
+### Abishan
+```{r}
+Abishan <- h2o.explain_row(best_RMSE, test, row_index = 1)
+Abishan$shap_explain_row$plots
+
+```
+
+His wage is influenced by various factors. For a high wage, being in Switzerland, having an "Other" job_role and having a business discipline undergraduate major are important. For a low wage, being a student, uncertain ML involvement, 0-1 years of experience, and an age of 22-24 are significant.
+These factors are not surprising and are therefore plausible.But the value around 23,3k is very low and with the deviation from 2'266 to 44'456 dollar still very low for switzerland. We don't think that makes sense.
+
+
+
+### Josua
+
+```{r}
+Josua <- h2o.explain_row(best_RMSE, test, row_index = 2)
+Josua$shap_explain_row$plots
+```
+
+According to our model, important parameters for a high wage include being in Switzerland, having th "Other" job role, using SQL programming language, and having a business discipline undergraduate major. For a low wage, being a student, not working with machine learning, having 0-1 years of experience, and writing code for 1-2 years are significant factors. 
+These factors are not surprising and are therefore plausible. With the almost 38k still low for Switzerland. Deviations varying from 16'894 to 59'084 doesn't make it better.
+
+### Lars
+
+```{r}
+Lars <- h2o.explain_row(best_RMSE, test, row_index = 3)
+Lars$shap_explain_row$plots
+```
+
+For a higher wage, being in Switzerland, having the "Other" job role, and having a business discipline undergraduate major are important. For a lower wage, being a student, not working with machine learning, having 0-1 years of experience, and falling within the age range of 25-29 are significant factors. These findings are based on the ML model, and other factors can also impact wages. also here the expected salary is very low for Switzerland. The Range with deviations is: 11'418 to 53'608 dollar
+
+### Luca
+
+```{r}
+Luca <- h2o.explain_row(best_RMSE, test, row_index = 4)
+Luca$shap_explain_row$plots
+```
+
+Wage is influenced by various factors. For a higher wage, being in Switzerland, working in the "Other" job role in the Shipping and Transportation industry, and having well-established involvement in machine learning at work are important. For a lower wage, being in the age range of 25-29, having 3-4 years of experience, and not being engaged in activities for building prototypes are significant. These findings are based on the ML model, and other factors can also impact wages. Here the Range and salary expecations are from our knowledge on point. Range starts from 70'305 to 112'495 dollar.
+
+### Conclusion
+
+Across all four trials, there are clear indications of factors that are relevant to wages. Country is a very strong determinant, which is interesting for us here in Switzerland since there were only 87 entries for our country. Additionally, being a student is an important factor. We can also observe the biggest difference in our statements since Luca was the only one who did mention being in the industry, instead stating "I am a student." As a result, Luca earns three times as much as the rest of us. Age is also a relevant factor; based on our information (everyone under 30 years of age), it has a negative impact on wages. The job role assigned as "Other" is the only strong factor that is not clearly understandable. Nevertheless, we are fundamentally very satisfied with our model, as the factors it considers are plausible and comprehensible. We will be happy once we can settle as students and immediately start earning more than before ;) 
+
+```{r,echo=FALSE}
+print(paste("Number of observations from Switzerland: ", nrow(data[data_wage$country == "Switzerland", ])))
+```
+## SessionInfo
+```{r,echo=FALSE}
+sessionInfo()
+```

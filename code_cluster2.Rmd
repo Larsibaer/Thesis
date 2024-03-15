@@ -37,39 +37,7 @@ cases_data <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))
 data <- cases_data # We make a copy from the original dataset and work on the copy
 
 ```
-```{r check}
-# Take specific STRUCTUREED columns how are interesting and remove all NA's
-data <- na.omit(select(data, number, account, created_by_group, business_service, assignment_group, auto_close, impact, priority, urgency, sla_has_breached, case_cause, resolution_code, reassignment_count, time_worked, openedToClosed, business_percentage))
-```
 
-```{r cleaning}
-#Remove all rows, where account, Busienss Service and created_by is less than 100 time in the dataset
-data <- data %>% group_by(account) %>% filter(n() > 100)
-data <- data %>% group_by(business_service) %>% filter(n() > 100)
-data <- data %>% group_by(assignment_group) %>% filter(n() > 20)
-#Verzicht auf Case Type, da ich sowieso nur Troubles anschaue
-#data <- data %>% filter(case_type == 'Trouble')
-```
-
-```{r,echo=FALSE}
-outlier <- function(x){
-  quantiles <- quantile(x, c(.05, .95))
-  x[x < quantiles[1]] <- quantiles[1]
-  x[x > quantiles[2]] <- quantiles[2]
-  x
-}   
-```
-
-In the next step, we apply the outlier function. For this, we use the map_df function. This allows us to apply a function to each element of a list or atomic vector.
-
-```{r, echo=FALSE}
-
-#Use function outlier for the dataset
-data['reassignment_count'] <- map_df(data['reassignment_count'], outlier)
-data['time_worked'] <- map_df(data['time_worked'], outlier)
-data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
-data['business_percentage'] <- map_df(data['business_percentage'], outlier)
-```
 
 ```{r, echo=FALSE}
 # Let's check our dependent variables
@@ -97,6 +65,8 @@ ggplot(data, aes(x = business_percentage)) +
        y = "Count", x = "SLA Percentage") +
   theme(legend.position="none")
 ```
+
+
 ```{r tfidf}
 tfidf_1 <- read_csv("Data/VectorizedText_description.csv")
 tfidf_2 <- read_csv("Data/VectorizedText_cause.csv")
@@ -203,8 +173,8 @@ I choose 6.
 
 ```{r, message=FALSE}
 # Let's run the k-means with the desired number of clusters 
-k <- 5
-set.seed(888)
+k <- 7
+set.seed(111)
 kmeans_model <- kmeans(encoded_df, centers = k)
 
 # Run PCA and extract principal components
@@ -285,8 +255,9 @@ ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
 
 ```
 ```{r save}
-data_new <- merge(data, cases_data[c('number','description', 'cause', 'close_notes')], by = "number", all.x = FALSE)
-write.csv(data_new, "Data/data_new.csv",row.names = FALSE)
+# Save the encoded_df for prediction case
+write.csv(encoded_df, "Data/encoded_df.csv",row.names = FALSE)
+
 final_data <- merge(data, data_scaled[c('number','cluster')], by = "number", all.x = FALSE)
 # Save the data
 write.csv(final_data, "Data/data_withclusters.csv",row.names = FALSE)
@@ -347,7 +318,7 @@ ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(dbscan_data2[["cluster"]
 
 ```{r differen Cluster 2}
 library(cluster)
-k = 6
+k = 5
 # Hierarchical clustering with complete linkage
 hier_data2_comp <- hclust(dist(encoded_df), method = "complete")
 clusters_data2_comp <- cutree(hier_data2_comp, k = k)
@@ -357,5 +328,9 @@ ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(clusters_data2_comp))) +
   geom_point() +
   theme_classic() +
   labs(title = "Hierarchical Clustering with Complete Linkage of Blobs data", color = "Clusters")
+
+```
+```{r}
+# Take a look at the assignmet_group development
 
 ```

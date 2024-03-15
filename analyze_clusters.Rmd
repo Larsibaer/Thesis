@@ -58,7 +58,7 @@ rm(list=ls())
 set.seed(7)
 
 setwd("C:/Thesis")
-#read json file
+#read file
 data <- read_csv("Data/data_withclusters.csv")
 data_raw <- data
 data <- data %>% filter(cluster == 1)
@@ -240,7 +240,12 @@ library(lubridate)
 
 data %>%
   mutate(wday = lubridate::wday(opened_at, label = TRUE, abbr = FALSE)) %>%
-  ggplot(aes(x = wday)) +
+  ggplot(aes(x = wday, fill = assignment_group)) +
+    geom_bar()
+
+data %>%
+  mutate(wday = lubridate::month(opened_at, label = TRUE, abbr = FALSE)) %>%
+  ggplot(aes(x = wday, fill = assignment_group)) +
     geom_bar()
 ```
 ```{r}
