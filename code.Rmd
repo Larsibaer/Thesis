@@ -153,7 +153,7 @@ data$sla_has_breached <- as.factor(data$sla_has_breached)
 ```
 ```{r check}
 # Take specific STRUCTUREED columns how are interesting and remove all NA's
-data <- na.omit(select(data, number, account, created_by_group, business_service, assignment_group, auto_close, impact, priority, urgency, sla_has_breached, case_cause, resolution_code, reassignment_count, time_worked, openedToClosed, business_percentage))
+data <- na.omit(select(data, number, account, created_by_group, business_service, assignment_group, auto_close, impact, priority, urgency, sla_has_breached, case_cause, resolution_code, reassignment_count, time_worked, opened, closed, openedToClosed, business_percentage))
 ```
 
 ```{r cleaning}
@@ -179,15 +179,15 @@ In the next step, we apply the outlier function. For this, we use the map_df fun
 ```{r, echo=FALSE}
 
 #Use function outlier for the dataset
-data['reassignment_count'] <- map_df(data['reassignment_count'], outlier)
-data['time_worked'] <- map_df(data['time_worked'], outlier)
-data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
-data['business_percentage'] <- map_df(data['business_percentage'], outlier)
+# data['reassignment_count'] <- map_df(data['reassignment_count'], outlier)
+# data['time_worked'] <- map_df(data['time_worked'], outlier)
+# data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
+# data['business_percentage'] <- map_df(data['business_percentage'], outlier)
 ```
 
 ```{r}
-data_new <- merge(data, cases_data[c('sys_id','number','description', 'cause', 'close_notes')], by = "number", all.x = FALSE)
-write.csv(data_new, "Data/data_new.csv",row.names = FALSE)
+# data_new <- merge(data, cases_data[c('sys_id','number','description', 'cause', 'close_notes')], by = "number", all.x = FALSE)
+data <- merge(data, cases_data[c('number','description', 'cause', 'close_notes')], by = "number", all.x = FALSE)
 ```
 
 ```{r save}
