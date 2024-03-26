@@ -1,0 +1,175 @@
+---
+title: "History Line"
+author: "Lars Wenger"
+date: "2024-03-26"
+output: html_document
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T,
+                      results = "hide")
+```
+
+## Import Libraries
+```{r echo = T, results = 'hide'}
+libraries = c( "fpp3", "ggplot2", "dplyr", "tidyr", "readxl", "forecast", "zoo", "tsibble", "GGally", "lubridate", "tidyverse", "stringi")
+
+lapply(libraries, function(x) if (!(x %in% installed.packages())) {
+  install.packages(x)
+})
+
+lapply(libraries, library, quietly = TRUE, character.only = TRUE)
+```
+
+# Read Data
+```{r read_data}
+rm(list=ls())
+
+setwd("C:/Thesis")
+# Read system history data
+history_data <- read_csv("Data/sys_history_line.csv", locale = locale(encoding = "UTF-8"))
+
+# Convert update_time to POSIXct
+history_data$update_time <- as.POSIXct(strptime(history_data$update_time, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+
+# Read all data
+data_all <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))
+
+# Merge data by 'set' and 'number'
+data <- history_data %>%
+  mutate(set = trimws(gsub("Case:", " ", set))) %>%
+  inner_join(select(data_all, number, account, opened, closed, openedToClosed), by = c("set" = "number"))
+```
+
+# Data Processing 
+
+```{r data_processing}
+# Filter out records where update_time is after closed
+data <- data %>%
+  filter(update_time <= closed)
+
+# Calculate time differences
+data <- data %>%
+  mutate(
+    time_diff_opened = as.numeric(update_time - opened)
+  )
+
+# Define function to calculate time differences for different fields
+calculate_time_diff <- function(data, field) {
+  data %>%
+    filter(field == !!field) %>%
+    filter(!is.na(new)) %>%
+    group_by(set) %>%
+    arrange(update_time) %>%
+    mutate(
+      time_diff_previous = as.numeric(update_time - lag(update_time))/3600,
+      sum_time_diff = sum(time_diff_previous, na.rm = TRUE),
+      percentage_time_diff = time_diff_previous / sum_time_diff * 100
+    ) %>%
+    select(set, new, percentage_time_diff) %>%
+    ungroup()
+}
+
+# Apply the function for different fields
+data_state <- calculate_time_diff(data, "state")
+data_assignment_group <- calculate_time_diff(data, "assignment_group")
+data_assigned_to <- calculate_time_diff(data, "assigned_to")
+
+```
+
+# Encoding
+```{r encoding}
+# One-hot encode
+one_hot_encode <- function(df, columns) {
+  # Ensure 'columns' is a character vector
+  if(!is.character(columns)) {
+    stop("columns argument must be a character vector specifying column names to encode")
+  }
+  
+  # Check if specified columns exist in the dataframe
+  if(!all(columns %in% names(df))) {
+    stop("Not all specified columns exist in the dataframe")
+  }
+  
+  # Start with the original dataframe minus the columns to be encoded
+  result_df <- df[, !(names(df) %in% columns)]
+  
+  # Iterate over the columns and perform one-hot encoding
+  for(column in columns) {
+    # Create a temporary dataframe to avoid altering the original data
+    temp_df <- data.frame(df[[column]], stringsAsFactors = FALSE)
+    colnames(temp_df) <- column
+    
+    # Apply model.matrix(), remove intercept column, and convert to dataframe
+    encoded_matrix <- model.matrix(~ . - 1, data = temp_df)
+    encoded_df <- data.frame(encoded_matrix)
+    
+    # Rename encoded columns to include original column name for clarity
+    colnames(encoded_df) <- gsub("X", column, colnames(encoded_df))
+    
+    # Combine with the result dataframe
+    result_df <- cbind(result_df, encoded_df)
+  }
+  
+  return(cbind(df[1], result_df))
+}
+
+# Apply one-hot encoding for different fields
+encoded_df_state <- one_hot_encode(data_state, "new")
+encoded_df_assignment_group <- one_hot_encode(data_assignment_group, "new")
+encoded_df_assigned_to <- one_hot_encode(data_assigned_to, "new")
+```
+#Aggregation
+```{r aggregation}
+# Simplify column removal
+encoded_df_state <- encoded_df_state[-2]
+encoded_df_assignmet_group <- encoded_df_assignment_group[-2]
+encoded_df_assigned_to <- encoded_df_assigned_to[-2]
+
+# Replace values with percentage
+replace_with_percentage <- function(df, percentage_col) {
+  df[, -c(1, 2)] <- df[, -c(1, 2)] * df[, percentage_col]
+  df[, -1] <- round(df[, -1], 2)
+  return(df)
+}
+
+encoded_df_state <- replace_with_percentage(encoded_df_state, "percentage_time_diff")
+encoded_df_assignmet_group <- replace_with_percentage(encoded_df_assignmet_group, "percentage_time_diff")
+encoded_df_assigned_to <- replace_with_percentage(encoded_df_assigned_to, "percentage_time_diff")
+
+# Group by set and sum all columns
+summarize_grouped_df <- function(df) {
+  df <- df %>%
+    group_by(set) %>%
+    summarise(across(-1, sum, na.rm = TRUE)) %>%
+    ungroup()
+  return(df)
+}
+
+grouped_encoded_df_state <- summarize_grouped_df(encoded_df_state)
+grouped_encoded_df_assignmet_group <- summarize_grouped_df(encoded_df_assignmet_group)
+grouped_encoded_df_assigned_to <- summarize_grouped_df(encoded_df_assigned_to)
+
+# Replace column names
+replace_column_names <- function(df, prefix) {
+  colnames(df) <- gsub("new", prefix, colnames(df))
+  return(df)
+}
+
+grouped_encoded_df_state <- replace_column_names(grouped_encoded_df_state, "prop_state_")
+grouped_encoded_df_assignmet_group <- replace_column_names(grouped_encoded_df_assignmet_group, "prop_group_")
+grouped_encoded_df_assigned_to <- replace_column_names(grouped_encoded_df_assigned_to, "prop_user_")
+
+```
+
+#Merge Dataframes
+```{r merge_dataframes}
+# Merge all dataframes
+final_df <- Reduce(function(x, y) merge(x, y, by = "set", all = TRUE), 
+                   list(grouped_encoded_df_state, grouped_encoded_df_assignmet_group, grouped_encoded_df_assigned_to))
+
+# Rename set to number
+colnames(final_df)[1] <- "number"
+```
