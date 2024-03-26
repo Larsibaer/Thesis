@@ -1,0 +1,70 @@
+---
+title: "Code Analysis"
+author: "Lars Wenger"
+date: "2024-03-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Import Libraries
+```{r echo = T, results = 'hide'}
+libraries = c( "fpp3", "ggplot2", "dplyr", "tidyr", "readxl", "forecast", "zoo", "tsibble", "GGally", "lubridate", "tidyverse", "stringi")
+
+lapply(libraries, function(x) if (!(x %in% installed.packages())) {
+  install.packages(x)
+})
+
+lapply(libraries, library, quietly = TRUE, character.only = TRUE)
+```
+
+# Read Data
+```{r read_data}
+rm(list=ls())
+
+setwd("C:/Thesis")
+
+cluster_data <- read_csv("Data/data_withclusters.csv", locale = locale(encoding = "UTF-8"))
+vect_desc_data <- read_csv("Data/VectorizedText_description.csv", locale = locale(encoding = "UTF-8"))
+vect_cause_data <- read_csv("Data/VectorizedText_cause.csv", locale = locale(encoding = "UTF-8"))
+vect_clause_notes_data <- read_csv("Data/VectorizedText_close_notes.csv", locale = locale(encoding = "UTF-8"))
+proportion_data <- read_csv("Data/data_proportion.csv", locale = locale(encoding = "UTF-8"))
+
+
+#Merge all data by number
+data_all <- cluster_data %>%
+  inner_join(vect_desc_data, by = c("number" = "number")) %>%
+  inner_join(vect_cause_data, by = c("number" = "number")) %>%
+  inner_join(vect_clause_notes_data, by = c("number" = "number")) %>%
+  inner_join(proportion_data, by = c("number" = "number"))
+```
+
+```{r save_data}
+#save data_all as csv
+write.csv(data_all, file = "Data/data_all.csv")
+```
+
+```{r}
+# Make new datafram with columns 1-6 and 20-25
+data_prop <- select(data_all, number, prop_state_Resolved)
+
+# Plot top 5 of sum of columns 93:194
+data_all %>%
+  select(93:188) %>%
+  summarise_all(sum) %>%
+  gather() %>%
+  arrange(desc(value)) %>%
+  head(5) %>%
+  ggplot(aes(x = fct_reorder(key, value), y = value)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top 5 columns with highest sum", x = "Column", y = "Sum")
+```
+
+```{r}
+
+```
+
+

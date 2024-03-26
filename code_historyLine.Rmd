@@ -46,9 +46,9 @@ data <- history_data %>%
 # Data Processing 
 
 ```{r data_processing}
-# Filter out records where update_time is after closed
+# Filter out records where update_time is after closed but new is not "Closed"
 data <- data %>%
-  filter(update_time <= closed)
+  filter(!(update_time > closed & new != "Closed"))
 
 # Calculate time differences
 data <- data %>%
@@ -57,20 +57,21 @@ data <- data %>%
   )
 
 # Define function to calculate time differences for different fields
-calculate_time_diff <- function(data, field) {
+calculate_time_diff <- function(data, field_name) {
   data %>%
-    filter(field == !!field) %>%
-    filter(!is.na(new)) %>%
-    group_by(set) %>%
+    filter(field == field_name) %>%
     arrange(update_time) %>%
+    group_by(set) %>%
     mutate(
-      time_diff_previous = as.numeric(update_time - lag(update_time))/3600,
+      time_diff_previous = as.numeric(difftime(update_time, lag(update_time), units = "hours")),
       sum_time_diff = sum(time_diff_previous, na.rm = TRUE),
       percentage_time_diff = time_diff_previous / sum_time_diff * 100
     ) %>%
-    select(set, new, percentage_time_diff) %>%
+    filter(!is.na(old)) %>%
+    select(set, old, percentage_time_diff) %>%
     ungroup()
 }
+
 
 # Apply the function for different fields
 data_state <- calculate_time_diff(data, "state")
@@ -117,9 +118,9 @@ one_hot_encode <- function(df, columns) {
 }
 
 # Apply one-hot encoding for different fields
-encoded_df_state <- one_hot_encode(data_state, "new")
-encoded_df_assignment_group <- one_hot_encode(data_assignment_group, "new")
-encoded_df_assigned_to <- one_hot_encode(data_assigned_to, "new")
+encoded_df_state <- one_hot_encode(data_state, "old")
+encoded_df_assignment_group <- one_hot_encode(data_assignment_group, "old")
+encoded_df_assigned_to <- one_hot_encode(data_assigned_to, "old")
 ```
 #Aggregation
 ```{r aggregation}
@@ -154,7 +155,7 @@ grouped_encoded_df_assigned_to <- summarize_grouped_df(encoded_df_assigned_to)
 
 # Replace column names
 replace_column_names <- function(df, prefix) {
-  colnames(df) <- gsub("new", prefix, colnames(df))
+  colnames(df) <- gsub("old", prefix, colnames(df))
   return(df)
 }
 
@@ -172,4 +173,10 @@ final_df <- Reduce(function(x, y) merge(x, y, by = "set", all = TRUE),
 
 # Rename set to number
 colnames(final_df)[1] <- "number"
+```
+
+#Save Data
+```{r save_data}
+# Save the final dataframe
+write_csv(final_df, "Data/data_proportion.csv")
 ```
