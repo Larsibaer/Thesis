@@ -22,6 +22,29 @@ lapply(libraries, function(x) if (!(x %in% installed.packages())) {
 
 lapply(libraries, library, quietly = TRUE, character.only = TRUE)
 ```
+```{r}
+# rm(list=ls())
+# 
+# setwd("C:/Thesis")
+# 
+# history_data <- read_delim("Data/historyLines/sys_history_line1.csv", locale = locale(encoding = "UTF-8"))
+# 
+# #insert empty column to history_data sys id as first column
+# history_data <- history_data %>% 
+#   mutate(sys_id = NA) %>% 
+#   select(sys_id, everything())
+# 
+# # Load the 15 csv from Data/historyLines folder. From historyLines/sys_history_line1.csv until sys_history_line15.csv alway add the rows to the history_data dataframe. Separatero of csv i "," and encoding is "UTF-8"
+# 
+# for (i in 2:15) {
+#   history_data <- bind_rows(history_data, read_delim(paste0("Data/historyLines/sys_history_line", i, ".csv"),delim=",", locale = locale(encoding = "UTF-8")))
+# }
+# 
+# #remove first column
+# history_data <- history_data[,-1]
+# #Save new dataframe to a csv file
+# write_csv(history_data, "Data/sys_history_line.csv")
+```
 
 # Read Data
 ```{r read_data}
@@ -32,7 +55,9 @@ setwd("C:/Thesis")
 history_data <- read_csv("Data/sys_history_line.csv", locale = locale(encoding = "UTF-8"))
 
 # Convert update_time to POSIXct
-history_data$update_time <- as.POSIXct(strptime(history_data$update_time, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+history_data$update_time <- as.POSIXct(strptime(history_data$update_time, "%d.%m.%Y %H:%M:%S", tz="UTC"))
+
+history_data <- select(history_data, set, update_time, field, old, new)
 
 # Read all data
 data_all <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))

@@ -66,29 +66,8 @@ data <- cases_data # We make a copy from the original dataset and work on the co
 
 ```
 
-```{r}
-# show the column comments
-cases_data %>% 
-  select(comments_and_work_notes) %>% 
-  head(10)
-
-# Split the comments column into multiple columns. Split all the comments by the character "mm-dd-YYY HH:MM:SS - " and create a new column for each part of the comment
-# Example string
-
-
-# Split the string using a regex pattern
-# The pattern \d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2} - matches the date and time format
-split_text <- strsplit(cases_data$comments_and_work_notes[202], split = "\\d{2}-\\d{2}-\\d{4} \\d{2}:\\d{2}:\\d{2} -", perl = TRUE)
-
-# View the result
-print(cases_data$comments_and_work_notes[202])
-print(split_text)
-print(cases_data$number[202])
-
-```
-
 ```{r strucutre}
-data <- select(cases_data, number = number, case = short_description, description = description, case_type = u_case_type, first_response_time = first_response_time, closed = closed_at, opened = opened_at, account = account, created_by = sys_created_by, business_service = business_service, assigned_to = assigned_to, assignment_group = assignment_group, auto_close = auto_close, time_worked = u_total_time_worked, reassignment_count = reassignment_count, impact = impact, priority = priority, urgency = urgency, comments = comments_and_work_notes, case_cause = u_case_cause, cause = cause, close_notes = close_notes, resolution_code = resolution_code)
+data <- select(cases_data, number = number, case = short_description, description = description, case_type = u_case_type, first_response_time = first_response_time, closed = closed_at, opened = opened_at, account = account, created_by = sys_created_by, business_service = business_service, assigned_to = assigned_to, assignment_group = assignment_group, time_worked = u_total_time_worked, impact = impact, priority = priority, urgency = urgency, comments = comments_and_work_notes, case_cause = u_case_cause, cause = cause, close_notes = close_notes, resolution_code = resolution_code)
 
 ```
 
@@ -105,8 +84,6 @@ data <- data %>%
 data$opened <- as.POSIXct(strptime(data$opened, "%d-%m-%Y %H:%M:%S", tz="UTC"))
 data$closed <- as.POSIXct(strptime(data$closed, "%d-%m-%Y %H:%M:%S", tz="UTC"))
 data$first_response_time <- as.POSIXct(strptime(data$first_response_time, "%d-%m-%Y %H:%M:%S", tz="UTC"))
-data$auto_close <- as.factor(data$auto_close)
-data$reassignment_count <- as.numeric(data$reassignment_count)
 data$impact <- as.factor(data$impact)
 data$priority <- as.factor(data$priority)
 data$urgency <- as.factor(data$urgency)
@@ -153,7 +130,7 @@ data$sla_has_breached <- as.factor(data$sla_has_breached)
 ```
 ```{r check}
 # Take specific STRUCTUREED columns how are interesting and remove all NA's
-data <- na.omit(select(data, number, account, created_by_group, business_service, assignment_group, auto_close, impact, priority, urgency, sla_has_breached, case_cause, resolution_code, reassignment_count, time_worked, opened, closed, openedToClosed, business_percentage))
+data <- na.omit(select(data, number, account, created_by_group, business_service, assignment_group, impact, priority, urgency, sla_has_breached, case_cause, resolution_code, opened, closed, time_worked, openedToClosed, business_percentage))
 ```
 
 ```{r cleaning}
@@ -179,10 +156,9 @@ In the next step, we apply the outlier function. For this, we use the map_df fun
 ```{r, echo=FALSE}
 
 #Use function outlier for the dataset
-# data['reassignment_count'] <- map_df(data['reassignment_count'], outlier)
-# data['time_worked'] <- map_df(data['time_worked'], outlier)
-# data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
-# data['business_percentage'] <- map_df(data['business_percentage'], outlier)
+data['time_worked'] <- map_df(data['time_worked'], outlier)
+data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
+data['business_percentage'] <- map_df(data['business_percentage'], outlier)
 ```
 
 ```{r}

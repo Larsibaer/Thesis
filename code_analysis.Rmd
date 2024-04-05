@@ -48,11 +48,11 @@ write.csv(data_all, file = "Data/data_all.csv")
 
 ```{r}
 # Make new datafram with columns 1-6 and 20-25
-data_prop <- select(data_all, number, prop_state_Resolved)
+data_prop <- select(data_all, number, c(93:100))
 
 # Plot top 5 of sum of columns 93:194
-data_all %>%
-  select(93:188) %>%
+data_prop[-1] %>%
+  drop_na() %>%
   summarise_all(sum) %>%
   gather() %>%
   arrange(desc(value)) %>%
@@ -63,8 +63,5 @@ data_all %>%
   labs(title = "Top 5 columns with highest sum", x = "Column", y = "Sum")
 ```
 
-```{r}
-
-```
 
 

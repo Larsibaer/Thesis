@@ -36,17 +36,23 @@ setwd("C:/Thesis")
 cases_data <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))
 data <- cases_data # We make a copy from the original dataset and work on the copy
 
+#Get Column position of description to close notes
+# Use only columns with exactly that name
+description_index <- which(colnames(data) == "description")
+cause_index <- which(colnames(data) == "cause")
+close_notes_index <- which(colnames(data) == "close_notes")
+# Remove assignmet_group
+assignmet_group_index <- which(colnames(data) == "assignment_group")
+case_cause_index <- which(colnames(data) == "case_cause")
+resolution_code_index <- which(colnames(data) == "resolution_code")
+
+#Remove the columns
+data <- data[,-c(description_index, cause_index, close_notes_index, assignmet_group_index,case_cause_index,resolution_code_index)]
 ```
 
 
 ```{r, echo=FALSE}
 # Let's check our dependent variables
-ggplot(data, aes(x = reassignment_count)) + 
-  geom_histogram(fill="#6ebb83", color = "black") +
-  theme(legend.position="none")+
-  labs(title = "Histogram of the reassignment count",
-       y = "Count", x = "Reassignemt Count")
-
 ggplot(data, aes(x = time_worked)) + 
   geom_histogram(fill="#6ebb83", color = "black") +
     labs(title = "Histogram of the Time Worked",
@@ -69,14 +75,15 @@ ggplot(data, aes(x = business_percentage)) +
 
 ```{r tfidf}
 tfidf_1 <- read_csv("Data/VectorizedText_description.csv")
-tfidf_2 <- read_csv("Data/VectorizedText_cause.csv")
-tfidf_3 <- read_csv("Data/VectorizedText_close_notes.csv")
-data_tfidf <- cbind(data, tfidf_1, tfidf_2, tfidf_3)
+# tfidf_2 <- read_csv("data/vectorizedtext_cause.csv")
+# tfidf_3 <- read_csv("data/vectorizedtext_close_notes.csv")
+# data_tfidf <- cbind(data, tfidf_1[-1], tfidf_2[-1], tfidf_3[-1])
+data_tfidf <- cbind(data, tfidf_1[-1])
 ```
 
 ```{r scaling}
-n <- ncol(data_tfidf)
-data_scaled <- cbind(data_tfidf[1:13], scale(data_tfidf[14:n]))
+n <- ncol(data)
+data_scaled <- cbind(data[1:8], scale(data[11:n]))
 ```
 
 ```{r oneHotEncoding}
@@ -114,17 +121,18 @@ one_hot_encode <- function(df, columns) {
   return(cbind(df[1], result_df))
 }
 # One-hot encoding
-encoded_df_withCaseNumber <- one_hot_encode(data_scaled, c("account", "created_by_group", "business_service", "assignment_group", "auto_close", "impact", "priority", "urgency", "sla_has_breached", "case_cause", "resolution_code"))
+encoded_df_withCaseNumber <- one_hot_encode(data_scaled, c("account", "created_by_group", "business_service", "impact", "priority", "urgency", "sla_has_breached"))
 
 encoded_df <- encoded_df_withCaseNumber %>% select(-number)
 ```
 
 
 
+
 ```{r}
 # ----------------- K-means Clustering ------------------- #
 # Now we are ready for running the k-means algorithm
-set.seed(111) 
+set.seed(7) 
 
 # Run k-means analysis
 # To start, we set k=3. This means we want to divide the data into 3 
@@ -150,7 +158,7 @@ elbow_data <- data.frame(
 # with the specific number of clusters and we extract the total within-cluster sum of squares 
 # for each into our elbow_data object.
 for(i in 1:15) {
-  set.seed(333)
+  set.seed(1)
   km <- kmeans(encoded_df, centers = i)
   elbow_data[i, "total_withinss"] <- km$tot.withinss
 }
@@ -173,7 +181,7 @@ I choose 6.
 
 ```{r, message=FALSE}
 # Let's run the k-means with the desired number of clusters 
-k <- 7
+k <- 4
 set.seed(111)
 kmeans_model <- kmeans(encoded_df, centers = k)
 
@@ -253,7 +261,7 @@ ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
   labs(color = "Cluster") +
   theme_minimal()
 
-```
+```   
 ```{r save}
 # Save the encoded_df for prediction case
 write.csv(encoded_df, "Data/encoded_df.csv",row.names = FALSE)
