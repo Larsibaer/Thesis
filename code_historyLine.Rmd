@@ -54,13 +54,17 @@ setwd("C:/Thesis")
 # Read system history data
 history_data <- read_csv("Data/sys_history_line.csv", locale = locale(encoding = "UTF-8"))
 
-# Convert update_time to POSIXct
+# add seconds to update_time if not present
+history_data$update_time <- ifelse(nchar(history_data$update_time) == 16, paste0(history_data$update_time, ":00"), history_data$update_time)
+
 history_data$update_time <- as.POSIXct(strptime(history_data$update_time, "%d.%m.%Y %H:%M:%S", tz="UTC"))
+
 
 history_data <- select(history_data, set, update_time, field, old, new)
 
 # Read all data
 data_all <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))
+
 
 # Merge data by 'set' and 'number'
 data <- history_data %>%
@@ -68,12 +72,92 @@ data <- history_data %>%
   inner_join(select(data_all, number, account, opened, closed, openedToClosed), by = c("set" = "number"))
 ```
 
-# Data Processing 
+# Data Processing
+
+```{r}
+# Count how many different set numbers are in dataset and print number
+data %>%
+  count(set) %>%
+  nrow()
+
+# Plot amount of each caterogy in 'field'
+history_data %>%
+  count(field) %>%
+  ggplot(aes(x = fct_reorder(field, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Amount of each category in 'field'")
+
+history_data %>%
+  filter(field == "state") %>%
+  count(old) %>%
+  ggplot(aes(x = fct_reorder(old, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Amount of each category in 'old'")
+
+
+
+history_data %>%
+  filter(field == "assignment_group") %>%
+  count(old) %>%
+  ggplot(aes(x = fct_reorder(old, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Amount of each category in 'old'")
+
+
+```
 
 ```{r data_processing}
+#If old value is "Offen" change it to "Open"
+data <- data %>%
+  mutate(old = ifelse(old == "Offen", "Open", old)) %>%
+  mutate(old = ifelse(old == "Geschlossen", "Closed", old)) %>%
+  mutate(old = ifelse(old == "In Bearbeitung", "Work in Progress", old)) %>%
+  mutate(old = ifelse(old == "Wartend", "On hold", old)) %>%
+  mutate(old = ifelse(old == "Gelöst", "Resolved", old))
 # Filter out records where update_time is after closed but new is not "Closed"
 data <- data %>%
-  filter(!(update_time > closed & new != "Closed"))
+  filter(!(update_time > closed + hours(2) & new != "Closed"))
+
+# If only one Change was made on a field, replace 'old' with 'new'
+# Example condition for replacement
+replace_condition <- with(data, ave(seq_along(set), set, field, FUN = length) == 1)
+
+# Replace 'old' with 'new' based on condition
+data$old[replace_condition] <- data$new[replace_condition]
+
+```
+
+```{r}
+# Function to process assignment groups and assigned_to fields
+process_assignment_groups <- function(df, fieldName, number) {
+
+  # Filter to get the rows where the field is 'assignment_group'
+  filtered_data <- df %>%
+    filter(field == fieldName) %>%
+    filter(!is.na(old))
+  
+  # Count how many times each assignment_group occurs and identify the top groups
+  top_groups <- filtered_data %>%
+    count(old) %>%
+    arrange(desc(n)) %>%
+    slice_head(n = number) %>%
+    pull(old)
+  
+  # Replace all other groups with "Other" within the filtered data
+  df <- df %>%
+    mutate(old = ifelse(field == fieldName & old %in% top_groups, old, ifelse(field == fieldName, "Other", old)))
+  
+  return(df)
+}
+
+data <- process_assignment_groups(data, fieldName = "assignment_group", number = 13)
+data <- process_assignment_groups(data, fieldName = "assigned_to", number = 25)
+```
+
+```{r}
 
 # Calculate time differences
 data <- data %>%
@@ -88,9 +172,12 @@ calculate_time_diff <- function(data, field_name) {
     arrange(update_time) %>%
     group_by(set) %>%
     mutate(
-      time_diff_previous = as.numeric(difftime(update_time, lag(update_time), units = "hours")),
+      # Calculate the time difference between updates
+      time_diff_previous = as.numeric(difftime(update_time, lag(update_time, default = first(opened)), units = "hours")),
+      # Calculate the sum of time differences, handling NA values
       sum_time_diff = sum(time_diff_previous, na.rm = TRUE),
-      percentage_time_diff = time_diff_previous / sum_time_diff * 100
+      # Calculate the percentage time difference
+      percentage_time_diff = ifelse(is.na(time_diff_previous) & n() == 1, 100, time_diff_previous / sum_time_diff * 100)
     ) %>%
     filter(!is.na(old)) %>%
     select(set, old, percentage_time_diff) %>%

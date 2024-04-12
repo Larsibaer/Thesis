@@ -82,8 +82,8 @@ data_tfidf <- cbind(data, tfidf_1[-1])
 ```
 
 ```{r scaling}
-n <- ncol(data)
-data_scaled <- cbind(data[1:8], scale(data[11:n]))
+n <- ncol(data_tfidf)
+data_scaled <- cbind(data_tfidf[1:8], scale(data_tfidf[11:n]))
 ```
 
 ```{r oneHotEncoding}
@@ -158,7 +158,7 @@ elbow_data <- data.frame(
 # with the specific number of clusters and we extract the total within-cluster sum of squares 
 # for each into our elbow_data object.
 for(i in 1:15) {
-  set.seed(1)
+  set.seed(7)
   km <- kmeans(encoded_df, centers = i)
   elbow_data[i, "total_withinss"] <- km$tot.withinss
 }
@@ -181,8 +181,8 @@ I choose 6.
 
 ```{r, message=FALSE}
 # Let's run the k-means with the desired number of clusters 
-k <- 4
-set.seed(111)
+k <- 3
+set.seed(1)
 kmeans_model <- kmeans(encoded_df, centers = k)
 
 # Run PCA and extract principal components
@@ -286,59 +286,16 @@ ggplot(final_data, aes(x = cluster, y = final_data$openedToClosed)) +
   theme_minimal() +
   labs(title = "Distribution of Opened to Closed Across Clusters", y = "Opened to Closed (Hours)", x = "Cluster")
 
-```
-```{r}
-# Assuming 'data' is your dataframe, 'cluster' is the clustering result column, and 'accounts' is the categorical variable
-
-# Create a contingency table for 'accounts' across clusters
-accounts_distribution <- table(final_data$cluster, final_data$assignment_group)
-
-# Print the contingency table
-print(accounts_distribution)
-
-
-# Convert the table to a dataframe for ggplot2
-accounts_df <- as.data.frame(accounts_distribution)
-colnames(accounts_df) <- c("Cluster", "Accounts", "Frequency")
-
-# Plot
-ggplot(accounts_df, aes(x = Cluster, y = Frequency, fill = Accounts)) +
-  geom_bar(stat = "identity", position = "dodge") +
+ggplot(final_data, aes(x = cluster, y = final_data$time_worked)) + 
+  geom_boxplot() +
   theme_minimal() +
-  labs(title = "Distribution of Accounts Across Clusters",
-       x = "Cluster",
-       y = "Frequency",
-       fill = "Accounts")
+  labs(title = "Distribution of Opened to Closed Across Clusters", y = "Opened to Closed (Hours)", x = "Cluster")
 
-```
-```{r different Clusters}
-library(dbscan)
-library(fpc)
-dbscan_data2 <- dbscan(encoded_df, eps = 0.5, MinPts = 50)
-
-# DBScan 
-ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(dbscan_data2[["cluster"]]))) +
-  geom_point() +
-  theme_classic() +
-  labs(title = "DBScan clustering of Blobs data", color = "Clusters")
-```
-
-
-```{r differen Cluster 2}
-library(cluster)
-k = 5
-# Hierarchical clustering with complete linkage
-hier_data2_comp <- hclust(dist(encoded_df), method = "complete")
-clusters_data2_comp <- cutree(hier_data2_comp, k = k)
-
-# Hierarchical clustering with complete linkage
-ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(clusters_data2_comp))) +
-  geom_point() +
-  theme_classic() +
-  labs(title = "Hierarchical Clustering with Complete Linkage of Blobs data", color = "Clusters")
-
-```
-```{r}
-# Take a look at the assignmet_group development
+# Plot the distribution of account across clusters
+ggplot(final_data, aes(x = cluster, fill = account)) + 
+  geom_bar() +
+  theme_minimal() +
+  labs(title = "Distribution of Account Across Clusters", y = "Count", x = "Cluster") +
+  scale_fill_discrete(name = "Account")
 
 ```

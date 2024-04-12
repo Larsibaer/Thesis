@@ -41,27 +41,100 @@ data_all <- cluster_data %>%
   inner_join(proportion_data, by = c("number" = "number"))
 ```
 
-```{r save_data}
+```{r}
+con<-file('Data/data_all.csv',encoding="UTF-8")
 #save data_all as csv
-write.csv(data_all, file = "Data/data_all.csv")
+write.csv(data_all, file = con)
+```
+```{r}
+data_all$cluster <- as.factor(data_all$cluster)
+# Plot a Boxplot of each Cluster for openedToClosed and time_worked
+ggplot(data_all, aes(x = cluster, y = data_all$openedToClosed)) + 
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution of Opened to Closed Across Clusters", y = "Opened to Closed (Hours)", x = "Cluster")
+
+data_all$cluster <- as.factor(data_all$cluster)
+# Plot a Boxplot of each Cluster for openedToClosed and time_worked
+ggplot(data_all, aes(x = cluster, y = data_all$time_worked)) + 
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution of Time Worked Across Clusters", y = "Time Worked (Hours)", x = "Cluster")
 ```
 
 ```{r}
+# Select the columns that contains "prop_state" in the name
+state_index <- grep("prop_state", colnames(data_all))
 # Make new datafram with columns 1-6 and 20-25
-data_prop <- select(data_all, number, c(93:100))
+data_prop_state <- select(data_all, number, cluster, c(state_index))
 
-# Plot top 5 of sum of columns 93:194
-data_prop[-1] %>%
-  drop_na() %>%
-  summarise_all(sum) %>%
-  gather() %>%
-  arrange(desc(value)) %>%
-  head(5) %>%
-  ggplot(aes(x = fct_reorder(key, value), y = value)) +
-  geom_col() +
-  coord_flip() +
-  labs(title = "Top 5 columns with highest sum", x = "Column", y = "Sum")
+# grouping the data by the cluster number, calculating the average duration for tickets within each cluster, and then visualizing these averages to identify any notable differences among the clusters.
+data_prop_state %>%
+  group_by(cluster) %>%
+  summarise_all(mean) %>%
+  pivot_longer(cols = c(3:length(data_prop_state)), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = cluster, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Duration of Tickets by Cluster",
+       x = "Cluster",
+       y = "Average Duration",
+       fill = "Variable") +
+  theme_minimal()
 ```
+
+```{r}
+# Select the columns that contains "prop_state" in the name
+user_index <- grep("prop_user", colnames(data_all))
+
+data_prop_user <- select(data_all, number, cluster, c(user_index))
+
+# Replace NA with 0
+data_prop_user[is.na(data_prop_user)] <- 0
+
+# get length of data_prop_user
+length(data_prop_user)
+
+
+# usering the data by the cluster number, calculating the average duration for tickets within each cluster, and then visualizing these averages to identify any notable differences among the clusters.
+data_prop_user %>%
+  group_by(cluster) %>%
+  summarise_all(mean) %>%
+  pivot_longer(cols = c(3:length(data_prop_user)), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = cluster, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Duration of Tickets by Cluster",
+       x = "Cluster",
+       y = "Average Duration",
+       fill = "Variable") +
+  theme_minimal()
+```
+```{r}
+# Select the columns that contains "prop_state" in the name
+group_index <- grep("prop_group", colnames(data_all))
+
+data_prop_group <- select(data_all, number, cluster, c(group_index))
+
+# Replace NA with 0
+data_prop_group[is.na(data_prop_group)] <- 0
+
+
+# grouping the data by the cluster number, calculating the average duration for tickets within each cluster, and then visualizing these averages to identify any notable differences among the clusters.
+data_prop_group %>%
+  group_by(cluster) %>%
+  summarise_all(mean) %>%
+  pivot_longer(cols = c(3:length(data_prop_group)), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = cluster, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Duration of Tickets by Cluster",
+       x = "Cluster",
+       y = "Average Duration",
+       fill = "Variable") +
+  theme_minimal()
+```
+
+```{r}
+```
+
 
 
 
