@@ -26,7 +26,9 @@ rm(list=ls())
 
 setwd("C:/Thesis")
 
+data <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))
 cluster_data <- read_csv("Data/data_withclusters.csv", locale = locale(encoding = "UTF-8"))
+topic_model_data <- read_csv("Data/topicModel_description.csv", locale = locale(encoding = "UTF-8"))
 vect_desc_data <- read_csv("Data/VectorizedText_description.csv", locale = locale(encoding = "UTF-8"))
 vect_cause_data <- read_csv("Data/VectorizedText_cause.csv", locale = locale(encoding = "UTF-8"))
 vect_clause_notes_data <- read_csv("Data/VectorizedText_close_notes.csv", locale = locale(encoding = "UTF-8"))
@@ -34,7 +36,9 @@ proportion_data <- read_csv("Data/data_proportion.csv", locale = locale(encoding
 
 
 #Merge all data by number
-data_all <- cluster_data %>%
+data_all <- data %>%
+  inner_join(cluster_data, by = c("number" = "number")) %>%
+  inner_join(topic_model_data, by = c("number" = "number")) %>%
   inner_join(vect_desc_data, by = c("number" = "number")) %>%
   inner_join(vect_cause_data, by = c("number" = "number")) %>%
   inner_join(vect_clause_notes_data, by = c("number" = "number")) %>%
@@ -46,6 +50,9 @@ data_gpt <- data_all
 data_gpt$created_by_group[data_gpt$created_by_group == "Unico"] <- "FuBar"
 #Rplace the column account with a Substring of the last 3 letters
 data_gpt$account <-  paste0(substr(data_gpt$account, 1, 2), substr(data_gpt$account, nchar(data_gpt$account)-3, nchar(data_gpt$account)))
+
+#remove columns 17-19
+data_gpt <- data_gpt[,-c(17:19)]
 
 #Save file without index
 write.csv(data_gpt, "Data/data_gpt.csv", row.names = FALSE)
@@ -80,9 +87,9 @@ ggplot(data_all, aes(x = cluster, y = data_all$time_worked)) +
 # Plot a ggplot bar Plot of Business Services for data_all cluster == 3, fill with data_prop_state. Show text in x axis in a 45 degree angle
 
 # Histogram comparison
-ggplot(data_all, aes(x = openedToClosed, fill = as.factor(cluster == 3))) +
+ggplot(data_all, aes(x = openedToClosed, fill = as.factor(cluster == c(1,5)))) +
   geom_histogram(alpha = 0.5, position = "identity", binwidth = 20) +
-  scale_fill_manual(values = c("red", "blue"), labels = c("Other Clusters", "Cluster 3")) +
+  scale_fill_manual(values = c("red", "blue"), labels = c("Other Clusters", "Cluster 1 or 5")) +
   labs(x = "Duration (openedToClosed)", y = "Frequency", title = "Comparison of Ticket Duration: Cluster 3 vs Other Clusters") +
   theme_minimal()
 ```
@@ -92,6 +99,9 @@ ggplot(data_all, aes(x = openedToClosed, fill = as.factor(cluster == 3))) +
 state_index <- grep("prop_state", colnames(data_all))
 # Make new datafram with columns 1-6 and 20-25
 data_prop_state <- select(data_all, number, cluster, c(state_index))
+
+# Remove prop_state_ of column names
+colnames(data_prop_state) <- gsub("prop_state_", "", colnames(data_prop_state))
 
 # grouping the data by the cluster number, calculating the average duration for tickets within each cluster, and then visualizing these averages to identify any notable differences among the clusters.
 data_prop_state %>%
@@ -132,7 +142,23 @@ data_prop_user %>%
        y = "Average Duration",
        fill = "Variable") +
   theme_minimal()
+
+# Plot barplot and legend separetly
+data_prop_user %>%
+  group_by(cluster) %>%
+  summarise_all(mean) %>%
+  pivot_longer(cols = c(3:length(data_prop_user)), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = cluster, y = value, fill = variable)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Duration of Tickets by Cluster",
+       x = "Cluster",
+       y = "Average Duration",
+       fill = "Variable") +
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
+
+
 ```{r}
 # Select the columns that contains "prop_state" in the name
 group_index <- grep("prop_group", colnames(data_all))
@@ -141,6 +167,9 @@ data_prop_group <- select(data_all, number, cluster, c(group_index))
 
 # Replace NA with 0
 data_prop_group[is.na(data_prop_group)] <- 0
+
+# Remove prop_group_ of column names
+colnames(data_prop_group) <- gsub("prop_group_", "", colnames(data_prop_group))
 
 
 # grouping the data by the cluster number, calculating the average duration for tickets within each cluster, and then visualizing these averages to identify any notable differences among the clusters.
@@ -161,12 +190,12 @@ data_prop_group %>%
 
 ```{r}
 # Business service distribution comparison
-cluster_3_services <- data_all %>% filter(cluster == 3) %>% count(business_service)
-other_clusters_services <- data_all %>% filter(cluster != 3) %>% count(business_service)
+cluster_1Or5_services <- data_all %>% filter(cluster == c(1,5)) %>% count(business_service)
+other_clusters_services <- data_all %>% filter(cluster != c(1,5)) %>% count(business_service)
 
 # Plotting
 ggplot() +
-  geom_bar(data = cluster_3_services, aes(x = business_service, y = n, fill = "Cluster 3"), stat = "identity", position = "dodge") +
+  geom_bar(data = cluster_1Or5_services, aes(x = business_service, y = n, fill = "Cluster 1 or 5"), stat = "identity", position = "dodge") +
   geom_bar(data = other_clusters_services, aes(x = business_service, y = n, fill = "Other Clusters"), stat = "identity", position = "dodge", alpha = 0.7) +
   scale_fill_manual(values = c("Cluster 3" = "blue", "Other Clusters" = "red")) +
   labs(x = "Business Service", y = "Count", title = "Business Service Distribution by Cluster") +
@@ -186,6 +215,8 @@ description_index <- grep("description_", colnames(data_all))
 cause_index <- grep("cause_", colnames(data_all))
 close_notes_index <- grep("close_notes_", colnames(data_all))
 
+# Remove prop_group_ of column names
+colnames(data_all) <- gsub("close_notes_", "close_", colnames(data_all))
 
 # Reshape from wide to long format and create a new 'term_type' column
 data_long <- data_all %>%
@@ -246,31 +277,33 @@ ggplot(final_analysis, aes(x = reorder(term, -mean_duration), y = mean_duration,
 
 ```
 ```{r}
-myterm = "drucker"
-myterm_type = "description"
+myterm = "outlook"
+myterm_type = "close"
 
 # Convert date column to Date type if not already
 data_long$date <- as.Date(data_long$opened)
 
 # Define the date cutoff for the last 3 months
 end_date <- max(data_long$date)  # assuming you want up to the latest date in your dataset
-start_date <- end_date %m-% months(6)  # 3 months before the end date
+start_date <- end_date %m-% months(3)  # 3 months before the end date
 
 # Filter data for the last 3 months and the period before it
 recent_data <- data_long %>%
-  filter(date > start_date)
+  filter(date > start_date) %>%
+  filter(cluster == 3)
 
 previous_data <- data_long %>%
-  filter(date <= start_date & date > (start_date %m-% months(6)))  # data from the previous 3 months
+  filter(date <= start_date & date > (start_date %m-% months(3)))%>%
+  filter(cluster == 3)
 
 # Calculate average TF-IDF scores
 avg_recent <- recent_data %>%
-  filter(term_type == myterm_type) %>%
+  filter(cluster == 3) %>%
   group_by(term) %>%
   summarise(avg_tf_idf_recent = mean(tf_idf))
 
 avg_previous <- previous_data %>%
-  filter(term_type == myterm_type) %>%
+  filter(cluster == 3) %>%
   group_by(term) %>%
   summarise(avg_tf_idf_previous = mean(tf_idf))
 
@@ -308,30 +341,60 @@ print(top_decreased)
 ```{r}
 # Assuming you're interested in a specific term across dates
 filtered_data <- data_long %>% 
-  filter(term == myterm & term_type == myterm_type)
+  # filter(term == myterm & term_type == myterm_type)
+  filter(term == myterm)
 
 # Add a trendline for each cluster
 
 ggplot(filtered_data, aes(x = opened, y = tf_idf, color = cluster)) +
   geom_line(alpha = 0.4) +
-  geom_smooth(method = "lm", se = FALSE) +
+  geom_smooth(method = "lm") +
   labs(x = "Date (Opened)", y = "TF-IDF Score", title = paste("Trend of", myterm, "in", myterm_type, "Over Time")) +
   theme_minimal()
 ```
 ```{r}
+# Identify all columns that relate to group involvement, which are prefixed with 'prop_group_'
+library(corrplot)
+group_columns <- grep("prop_group_", names(data_all), value = TRUE)
 
-# Reshape from wide to long format
-data_long <- pivot_longer(data, cols = starts_with("word"), names_to = "word", values_to = "tf_idf")
+clusters_1_5 <- data_all %>%
+  filter(cluster %in% c(1, 5))
 
-# Calculate the average TF-IDF for each word in each group
-word_group_avgs <- data_long %>%
-  group_by(group, word) %>%
-  summarise(avg_tf_idf = mean(tf_idf, na.rm = TRUE)) %>%
-  ungroup()
+selected_data <- data_all %>% 
+  filter(cluster %in% c(1, 5)) %>%
+  select(openedToClosed, group_columns)
 
-# Identify the top words for each group
-top_words_by_group <- word_group_avgs %>%
-  group_by(group) %>%
-  top_n(1, avg_tf_idf)  # You can change the number here based on how many top words you want
+# Calculate the correlation matrix
+correlation_matrix <- cor(selected_data, use = "complete.obs")
 
+corrplot(correlation_matrix, method = "color", type = "upper", order = "hclust",
+         tl.col = "black", tl.srt = 45)
+
+
+# Show How the columns are influencing the openedToClosed duration
+correlation_with_opened_to_closed <- cor(selected_data)
+correlation_with_opened_to_closed <- correlation_with_opened_to_closed["openedToClosed", -1]
+correlation_with_opened_to_closed
+
+
+
+
+```
+
+The prominent involvement of Service Desk 1st Level suggests that many issues in clusters 1 and 5 are handled at the first point of contact, which aligns with their potentially urgent or critical nature. The involvement of IT Operations and Cyber Security & Network groups in some cases might indicate technical complexities or security-related issues within these clusters.
+
+```{r}
+# Calculate the correlation between 'openedToClosed' and the group involvement columns
+correlation_with_opened_to_closed <- cor(clusters_1_5[, c("openedToClosed", group_columns)])
+
+# Extract the correlations of 'openedToClosed' with group columns
+correlation_with_opened_to_closed <- correlation_with_opened_to_closed["openedToClosed", -1]
+
+# Print the correlation results
+correlation_with_opened_to_closed
+library(corrplot)
+correlation_matrix <- cor(clusters_1_5[, c("openedToClosed", group_columns)])
+corrplot(correlation_matrix, method = "circle", type = "upper", order = "hclust",
+         tl.col = "black", tl.srt = 45, # Rotate labels for better readability
+         title = "Correlation between OpenedToClosed and Group Involvement Columns")
 ```
