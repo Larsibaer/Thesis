@@ -51,7 +51,7 @@ data <- data[,-c(description_index, cause_index, close_notes_index, assignmet_gr
 ```
 ```{r}
 # Convert dates to numeric by calculating the number of days since the first date
-data$opened <- as.numeric(as.Date(data$opened))
+# data$opened <- as.numeric(as.Date(data$opened))
 ```
 
 ```{r tfidf}
@@ -64,7 +64,7 @@ data_tfidf <- cbind(data, tfidf_1[-1])
 
 ```{r scaling}
 n <- ncol(data_tfidf)
-data_scaled <- cbind(data_tfidf[1:7],scale(data_tfidf[9]), data_tfidf[14:n])
+data_scaled <- cbind(data_tfidf[1:7], data_tfidf[14:n])
 ```
 
 
@@ -249,6 +249,7 @@ ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
 write.csv(encoded_df, "Data/encoded_df.csv",row.names = FALSE)
 
 final_data <- merge(data, data_scaled[c('number','cluster')], by = "number", all.x = FALSE)
+final_data <- select(final_data, c("number", "cluster"))
 # Save the data
 write.csv(final_data, "Data/data_withclusters.csv",row.names = FALSE)
 ```

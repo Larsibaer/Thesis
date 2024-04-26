@@ -138,13 +138,11 @@ data <- na.omit(select(data, number, account, created_by_group, business_service
 data <- data %>% group_by(account) %>% filter(n() > 100)
 data <- data %>% group_by(business_service) %>% filter(n() > 100)
 data <- data %>% group_by(assignment_group) %>% filter(n() > 20)
-#Verzicht auf Case Type, da ich sowieso nur Troubles anschaue
-#data <- data %>% filter(case_type == 'Trouble')
 ```
 
 ```{r,echo=FALSE}
 outlier <- function(x){
-  quantiles <- quantile(x, c(.05, .95))
+  quantiles <- quantile(x, c(.1, .9))
   x[x < quantiles[1]] <- quantiles[1]
   x[x > quantiles[2]] <- quantiles[2]
   x
