@@ -50,8 +50,8 @@ resolution_code_index <- which(colnames(data) == "resolution_code")
 data <- data[,-c(description_index, cause_index, close_notes_index, assignmet_group_index,case_cause_index,resolution_code_index)]
 ```
 ```{r}
-# Convert dates to numeric by calculating the number of days since the first date
-# data$opened <- as.numeric(as.Date(data$opened))
+#Add weekday column
+data$weekday <- weekdays(data$opened)
 ```
 
 ```{r tfidf}
@@ -59,12 +59,6 @@ tfidf_1 <- read_csv("Data/topicModel_description.csv")
 # tfidf_2 <- read_csv("data/vectorizedtext_cause.csv")
 # tfidf_3 <- read_csv("data/vectorizedtext_close_notes.csv")
 # data_tfidf <- cbind(data, tfidf_1[-1], tfidf_2[-1], tfidf_3[-1])
-data_tfidf <- cbind(data, tfidf_1[-1])
-```
-
-```{r scaling}
-n <- ncol(data_tfidf)
-data_scaled <- cbind(data_tfidf[c(1,3,5,6,7)], data_tfidf[15:n])
 ```
 
 
@@ -102,10 +96,14 @@ one_hot_encode <- function(df, columns) {
   
   return(cbind(df[1], result_df))
 }
+
+data <- select(data,number, created_by_group, impact, priority, urgency, weekday)
 # One-hot encoding
-encoded_df_withCaseNumber <- one_hot_encode(data_scaled, c("created_by_group", "impact", "priority", "urgency"))
+encoded_df_withCaseNumber <- one_hot_encode(data, c("created_by_group", "impact", "priority", "urgency", "weekday"))
 
 encoded_df <- encoded_df_withCaseNumber %>% select(-number)
+
+encoded_df <- cbind(encoded_df, tfidf_1[-1])
 
 encoded_df <- scale(encoded_df)
 ```
@@ -142,7 +140,7 @@ elbow_data <- data.frame(
 # with the specific number of clusters and we extract the total within-cluster sum of squares 
 # for each into our elbow_data object.
 for(i in 1:15) {
-  set.seed(1)
+  set.seed(111)
   km <- kmeans(encoded_df, centers = i)
   elbow_data[i, "total_withinss"] <- km$tot.withinss
 }
@@ -165,6 +163,7 @@ I choose 3.
 
 ```{r, message=FALSE}
 # Let's run the k-means with the desired number of clusters 
+data_scaled <- data
 k <- 8
 set.seed(1)
 kmeans_model <- kmeans(encoded_df, centers = k)
@@ -247,7 +246,7 @@ ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
 
 ```   
 ```{r}
-final_data <- merge(data, data_scaled[c('number','cluster')], by = "number", all.x = FALSE)
+final_data <- merge(cases_data, data_scaled[c('number','cluster')], by = "number", all.x = FALSE)
 ```
 
 ```{r analyzeCluster}

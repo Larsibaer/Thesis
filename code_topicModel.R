@@ -20,33 +20,33 @@ rm(list=ls())
 setwd("C:/Thesis")
 #read json file
 cases_data <- read_csv("Data/TopicModel_VectorizedText_description.csv", locale = locale(encoding = "UTF-8"))
-reviews <- cases_data
+descriptions <- cases_data
 
 
 ### - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-### STEP 2: LOAD AND SELECT DATA (E.G. AMAZON REVIEWS) 
+### STEP 2: LOAD AND SELECT DATA (E.G. AMAZON descriptions) 
 ### - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # OPTIONAL: Specify minimum text length (number of characters)
-reviews <- subset(reviews, reviews$description > 100)
+descriptions <- subset(descriptions, descriptions$description > 100)
 
 # remove NAs in description
-reviews <- reviews[!is.na(reviews$description),]
+descriptions <- descriptions[!is.na(descriptions$description),]
 
 # OPTIONAL: Further selection (select variable to filter)
-# reviews<- subset(reviews, reviews$product == "Fitbit Charge 2")
+# descriptions<- subset(descriptions, descriptions$product == "Fitbit Charge 2")
 
 # OPTIONAL: Create random sample
-# reviews <- sample_n(reviews, 1000)
+# descriptions <- sample_n(descriptions, 1000)
 
 ### - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ### STEP 3: PREPARE TEXT DATA (TEXT PRE-PROCESSING)
 ### - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Remove all "-" where they are not needed
-reviews$description <- gsub("-", " ", reviews$description)
+descriptions$description <- gsub("-", " ", descriptions$description)
 
 # Transform words into tokens, select basic text preprocessing steps
-tokens <- tokens(reviews$description,
+tokens <- tokens(descriptions$description,
                  remove_punct = TRUE,
                  remove_symbols = TRUE,
                  remove_numbers = TRUE,
@@ -64,14 +64,14 @@ myDfm <-dfm(tokens)
 ### STEP 4: ANALYZE TEXT
 ### - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Create LDA model (specify number of topics)
-reviews_lda <- LDA(myDfm, k = 6, control = list(seed = 123))
-topics <- as.data.frame(terms(reviews_lda, 50))
+descriptions_lda <- LDA(myDfm, k = 7, control = list(seed = 123))
+topics <- as.data.frame(terms(descriptions_lda, 50))
 
 # Convert into tidy-format to visualize results 
-reviews_lda_td <- tidy(reviews_lda)
+descriptions_lda_td <- tidy(descriptions_lda)
 
 # Extract top-terms per topic 
-top_terms <- reviews_lda_td %>%
+top_terms <- descriptions_lda_td %>%
   group_by(topic) %>%
   top_n(10, beta) %>%
   ungroup() %>%
@@ -86,10 +86,10 @@ top_terms %>%
   coord_flip()
 
 # Link results to metadata
-tmResult <- posterior(reviews_lda)
+tmResult <- posterior(descriptions_lda)
 theta <- tmResult$topics
-lda_results <- cbind(reviews, theta)
-rm (theta, reviews_lda,reviews_lda_td,tmResult,top_terms,tokens)
+lda_results <- cbind(descriptions, theta)
+rm (theta, descriptions_lda,descriptions_lda_td,tmResult,top_terms,tokens)
 
 
 
@@ -105,7 +105,7 @@ lda_results[is.na(lda_results)] <- 0
 lda_results <- lda_results[-ncol(lda_results)]
 
 # Rename columns
-colnames(lda_results) <- c("number", "Desktop_Issues", "VDI_Troubleshooting", "Functionality_Problems", "Hardware_Concerns", "Login_Access", "Email_Communication")
+colnames(lda_results) <- c("number", "topic_network_server", "topic_performance_responseIssues", "topic_vdi_hostedDesktop", "topic_authentication_accounts", "topic_officeApplications", "topic_printing_drive", "topic_support_infrastructure")
 
 # Save the final dataframe
 write_csv(lda_results, "Data/topicModel_description.csv")

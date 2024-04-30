@@ -54,6 +54,13 @@ data_gpt$account <-  paste0(substr(data_gpt$account, 1, 2), substr(data_gpt$acco
 #remove columns 17-19
 data_gpt <- data_gpt[,-c(17:19)]
 
+state_index <- grep("prop_state", colnames(data_all))
+group_index <- grep("prop_group", colnames(data_all))
+topic_index <- grep("topic_", colnames(data_all))
+
+#Data Selection
+data_gpt <- data_gpt %>% select(cluster, created_by_group, account, openedToClosed, time_worked, topic_index, state_index, group_index, case_cause, resolution_code, impact, priority, urgency)
+
 #Save file without index
 write.csv(data_gpt, "Data/data_gpt.csv", row.names = FALSE)
 ```
@@ -61,6 +68,7 @@ write.csv(data_gpt, "Data/data_gpt.csv", row.names = FALSE)
 ```{r}
 data_all$cluster <- as.factor(data_all$cluster)
 # Plot a Boxplot of each Cluster for openedToClosed and time_worked
+
 ggplot(data_all, aes(x = cluster, y = data_all$openedToClosed)) + 
   geom_boxplot() +
   theme_minimal() +
@@ -70,10 +78,10 @@ ggplot(data_all, aes(x = cluster, y = data_all$openedToClosed)) +
 # Plot a ggplot bar Plot of Business Services for data_all cluster == 3, fill with data_prop_state. Show text in x axis in a 45 degree angle
 
 # Histogram comparison
-ggplot(data_all, aes(x = openedToClosed, fill = as.factor(cluster == c(4,5)))) +
+ggplot(data_all, aes(x = openedToClosed, fill = as.factor(cluster == c(7)))) +
   geom_histogram(alpha = 0.5, position = "identity", binwidth = 20) +
-  scale_fill_manual(values = c("red", "blue"), labels = c("Other Clusters", "Cluster 4 or 5")) +
-  labs(x = "Duration (openedToClosed)", y = "Frequency", title = "Comparison of Ticket Duration: Cluster 3 vs Other Clusters") +
+  scale_fill_manual(values = c("red", "blue"), labels = c("Other Clusters", "Cluster 7")) +
+  labs(x = "Duration (openedToClosed)", y = "Frequency", title = "Comparison of Ticket Duration: Cluster 7 vs Other Clusters") +
   theme_minimal()
 ```
 
@@ -104,26 +112,31 @@ data_prop_state %>%
 # Select the columns that contains "prop_state" in the name
 user_index <- grep("prop_user", colnames(data_all))
 
-data_prop_user <- select(data_all, cluster, c(user_index))
+data_prop_user <- select(data_all, cluster, openedToClosed, c(user_index))
+
+data_prop_user <- data_prop_user %>% filter(openedToClosed > 20)
+
+# Remove openedToClosed column
+data_prop_user <- data_prop_user[-2]
 
 # Replace NA with 0
 data_prop_user[is.na(data_prop_user)] <- 0
 
 # Remove prop_user_ of column names
 colnames(data_prop_user) <- gsub("prop_user_", "", colnames(data_prop_user))
-
+# 
 # Add row with the mean of the columns
 colSum <- rbind(data_prop_user, colMeans(data_prop_user[-1]))
 
 # Get all column indexes, where last row is > 2
-index <- which(colSum[nrow(colSum),] > 3)
+index <- which(colSum[nrow(colSum),] > 2.5)
 
 # usering the data by the cluster number, calculating the average duration for tickets within each cluster, and then visualizing these averages to identify any notable differences among the clusters.
 data_prop_user %>%
-  select(cluster, index) %>%
   group_by(cluster) %>%
+  select(cluster, index) %>%
   summarise_all(mean) %>%
-  pivot_longer(cols = c(2:length(index)), names_to = "variable", values_to = "value") %>%
+  pivot_longer(cols = c(2:6), names_to = "variable", values_to = "value") %>%
   ggplot(aes(x = cluster, y = value, fill = variable)) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(title = "Average Duration of Tickets by Cluster",
@@ -139,26 +152,30 @@ data_prop_user %>%
 # Select the columns that contains "prop_state" in the name
 group_index <- grep("prop_group", colnames(data_all))
 
-data_prop_group <- select(data_all, cluster, c(group_index))
+data_prop_group <- select(data_all, cluster, openedToClosed, c(group_index))
 
-# Replace NA with 0
-data_prop_group[is.na(data_prop_group)] <- 0
+data_prop_group <- data_prop_group %>% filter(openedToClosed > 20 & prop_group_Service.Desk.1st.Level < 95)
 
-# Remove prop_group_ of column names
-colnames(data_prop_group) <- gsub("prop_group_", "", colnames(data_prop_group))
+# Remove openedToClosed column
+data_prop_group <- data_prop_group[-2]
 
-# Add row with the mean of the columns
-colSum <- rbind(data_prop_group, colMeans(data_prop_group[-1]))
-
-# Get all column indexes, where last row is > 2
-index <- which(colSum[nrow(colSum),] > 2)
+# # Replace NA with 0
+# data_prop_group[is.na(data_prop_group)] <- 0
+# 
+# # Remove prop_group_ of column names
+# colnames(data_prop_group) <- gsub("prop_group_", "", colnames(data_prop_group))
+# 
+# # Add row with the mean of the columns
+# colSum <- rbind(data_prop_group, colMeans(data_prop_group[-1]))
+# 
+# # Get all column indexes, where last row is > 2
+# index <- which(colSum[nrow(colSum),] > 2)
 
 # grouping the data by the cluster number, calculating the average duration for tickets within each cluster, and then visualizing these averages to identify any notable differences among the clusters.
 data_prop_group %>%
-  select(cluster, index) %>%
   group_by(cluster) %>%
   summarise_all(mean) %>%
-  pivot_longer(cols = c(2:length(index)), names_to = "variable", values_to = "value") %>%
+  pivot_longer(cols = c(2:length(data_prop_group)), names_to = "variable", values_to = "value") %>%
   ggplot(aes(x = cluster, y = value, fill = variable)) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(title = "Average Duration of Tickets by Cluster",
@@ -166,39 +183,6 @@ data_prop_group %>%
        y = "Average Duration",
        fill = "Variable") +
   theme_minimal()
-
-data_prop_group %>%
-  select(cluster, index) %>%
-  filter(cluster %in% c(4,5)) %>%
-  group_by(cluster) %>%
-  summarise_all(mean) %>%
-  pivot_longer(cols = c(2:length(index)), names_to = "variable", values_to = "value") %>%
-  ggplot(aes(x = cluster, y = value, fill = variable)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Average Duration of Tickets by Cluster 4 and 5",
-       x = "Cluster",
-       y = "Average Duration",
-       fill = "Variable") +
-  theme_minimal()
-
-test <- data_prop_group %>%
-  group_by(cluster) %>%
-  summarise_all(mean)
-
-data_long_group <- data_all %>%
-  select(opened, group_index) %>%
-  select(opened, index) %>%
-  pivot_longer(cols = -opened, names_to = "group", values_to = "value")
-
-# Plotting the timeline
-ggplot(data_long_group, aes(x = opened, y = value, color = group)) +
-  geom_line(alpha = 0.2) +
-  geom_smooth(method = "lm") +
-  labs(title = "Timeline of Prop Group Values", x = "Time", y = "Value") +
-  theme_minimal() +
-  theme(legend.position = "bottom")
-
-
 ```
 
 ## Focus on Topics
@@ -207,13 +191,13 @@ ggplot(data_long_group, aes(x = opened, y = value, color = group)) +
 # Reshape from wide to long format and create a new 'term_type' column
 data_long <- data_all %>%
   pivot_longer(
-    cols = c(21:26),
+    cols = c(topic_index),
     names_to = c("topic"),
     values_to = "value"
   )
 
 
-mytopic = "VDI_Troubleshooting"
+mytopic = "topic_network_server"
 
 # Convert date column to Date type if not already
 data_long$date <- as.Date(data_long$opened)
@@ -225,20 +209,20 @@ start_date <- end_date %m-% months(3)  # 3 months before the end date
 # Filter data for the last 3 months and the period before it
 recent_data <- data_long %>%
   filter(date > start_date) %>%
-  filter(cluster == c(4,5))
+  filter(cluster == c(1:6))
 
 previous_data <- data_long %>%
   filter(date <= start_date & date > (start_date %m-% months(3)))%>%
-  filter(cluster == c(4,5))
+  filter(cluster == c(1:6))
 
 # Calculate average TF-IDF scores
 avg_recent <- recent_data %>%
-  filter(cluster == c(4,5)) %>%
+  filter(cluster == c(1:6)) %>%
   group_by(topic) %>%
   summarise(avg_tf_idf_recent = mean(value))
 
 avg_previous <- previous_data %>%
-  filter(cluster == c(4,5)) %>%
+  filter(cluster == c(1:6)) %>%
   group_by(topic) %>%
   summarise(avg_tf_idf_previous = mean(value))
 
@@ -272,18 +256,102 @@ filtered_data <- data_long %>%
   # filter(term == myterm & term_type == myterm_type)
   filter(topic == mytopic)
 
+# Add categorical columns of openedToClosed breaking by 25%, 50%, 75% and 100%
+filtered_data$openedToClosed_cat <- cut(filtered_data$openedToClosed, breaks = quantile(filtered_data$openedToClosed, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE), include.lowest = TRUE)
+
+
 # Add a trendline for each cluster
 
-ggplot(filtered_data, aes(x = opened, y = value, color = cluster)) +
-  geom_line(alpha = 0.6) +
+ggplot(filtered_data, aes(x = opened, y = value, color = openedToClosed_cat)) +
   geom_smooth(method = "lm") +
   labs(x = "Date (Opened)", y = "TF-IDF Score", title = paste("Trend of", mytopic, "Over Time")) +
   theme_minimal()
 ```
 
 ```{r}
+# For each cluster and topic, calculate the average TF-IDF score
+avg_tf_idf <- data_long %>%
+  group_by(cluster, topic) %>%
+  summarise(avg_tf_idf = mean(value))
+
+# Plot the average TF-IDF scores for each cluster and topic
+ggplot(avg_tf_idf, aes(x = cluster, y = avg_tf_idf, fill = topic)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average TF-IDF Scores by Cluster and Topic",
+       x = "Cluster",
+       y = "Average TF-IDF Score",
+       fill = "Topic") +
+  theme_minimal()
+
+# For a specific cluster and topic, plot the trend of TF-IDF scores over time
+mycluster <- c(7)
+
+filtered_data <- data_long %>%
+  filter(cluster == mycluster, topic == mytopic)
+
+ggplot(filtered_data, aes(x = opened, y = value)) +
+  geom_line() +
+  geom_smooth(method = "lm") +
+  labs(title = paste("Trend of", mytopic, "for Cluster", mycluster),
+       x = "Date (Opened)",
+       y = "TF-IDF Score") +
+  theme_minimal()
+```
+```{r}
+topic_index <- grep("topic_", colnames(data_all))
+
+# Calculate the mean of the topic columns grouped by 'cluster'
+topic_distribution_by_cluster <- data_all %>%
+  select(cluster, all_of(topic_index)) %>%
+  group_by(cluster) %>%
+  summarise(across(everything(), mean, na.rm = TRUE))
+
+# Reshape the data for plotting
+long_topic_distribution <- pivot_longer(topic_distribution_by_cluster, 
+                                        cols = -cluster, 
+                                        names_to = "Topic", 
+                                        values_to = "Mean_Frequency")
+
+# Plotting with ggplot2
+ggplot(long_topic_distribution, aes(x = Topic, y = Mean_Frequency, group = cluster, color = factor(cluster))) +
+  geom_line() +
+  geom_point() + # Add points to the line plot
+  theme_minimal() +
+  labs(title = 'Mean Frequency of Topics Across Clusters',
+       x = 'Topic', y = 'Mean Frequency',
+       color = 'Cluster') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels for better readability
+  scale_color_brewer(palette = "Set1")  # Use a color palette that's clear
 
 ```
+```{r}
+library(corrplot)
+
+numeric_data <- select(data_all, openedToClosed, topic_index, group_index, state_index, user_index)
+
+# Calculate correlation matrix
+correlation_matrix <- cor(numeric_data, use = "complete.obs")
+
+# Extract correlations with 'openedToClosed'
+correlation_with_openedToClosed <- correlation_matrix["openedToClosed", ]
+
+# Sort and select the top 5 and bottom 5 correlations
+top_bottom_correlation <- sort(correlation_with_openedToClosed, decreasing = TRUE)
+top_3 <- head(top_bottom_correlation, 5)
+bottom_3 <- tail(top_bottom_correlation, 4)
+
+# Combine top 5 and bottom 5 for visualization
+important_correlations <- c(top_3, bottom_3)
+important_correlation_values <- correlation_matrix[rownames(correlation_matrix) %in% names(important_correlations), 
+                                                   colnames(correlation_matrix) %in% names(important_correlations)]
+
+
+# Plotting the selected correlations
+corrplot(important_correlation_values, method = "circle", type = "upper",
+         tl.col = "black", tl.srt = 45)  # Rotate labels for better readability
+
+```
+
 
 
 
