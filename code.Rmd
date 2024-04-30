@@ -161,7 +161,7 @@ data['business_percentage'] <- map_df(data['business_percentage'], outlier)
 
 ```{r}
 # data_new <- merge(data, cases_data[c('sys_id','number','description', 'cause', 'close_notes')], by = "number", all.x = FALSE)
-data <- merge(data, cases_data[c('number','description', 'cause', 'close_notes')], by = "number", all.x = FALSE)
+data <- merge(data, cases_data[c('number','description', 'short_description', 'cause', 'close_notes')], by = "number", all.x = FALSE)
 ```
 
 ```{r save}
