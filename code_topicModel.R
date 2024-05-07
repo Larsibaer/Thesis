@@ -89,7 +89,7 @@ top_terms %>%
 tmResult <- posterior(descriptions_lda)
 theta <- tmResult$topics
 lda_results <- cbind(descriptions, theta)
-rm (theta, descriptions_lda,descriptions_lda_td,tmResult,top_terms,tokens)
+rm (theta,descriptions_lda_td,tmResult,top_terms,tokens)
 
 
 
@@ -140,15 +140,84 @@ FindTopicsNumber_plot(result)
 
 
 ###################################################################################################
-### Wordclouds                                                                                        
-### (c) Patrick Cichy, Berner Fachhochschule BFH
+### All Text Information                                                                                        
 ###################################################################################################
 
-# Create a wordcloud from your Document-Feature-Matrix
-textplot_wordcloud(myDfm,
-                   min_size = 0.5,
-                   max_size = 4,
-                   min_count = 10,
-                   max_words = 300,
-                   color = "darkblue")
+close_notes <- read_csv("Data/TopicModel_VectorizedText_close_notes.csv", locale = locale(encoding = "UTF-8"))
+cause <- read_csv("Data/TopicModel_VectorizedText_cause.csv", locale = locale(encoding = "UTF-8"))
+
+# Combine all text information
+all_text <- merge(close_notes, cause, by = "number", all = TRUE)
+all_text <- merge(all_text, descriptions, by = "number", all = TRUE)
+
+# Paste all text information together
+all_text$all_text <- paste(all_text$close_notes, all_text$cause, all_text$description, sep = " ")
+
+#Replace Text containing LOG with ''
+all_text$all_text <- gsub("NA", "", all_text$all_text)
+
+# Trim white spaces at beginning and end of text
+all_text$all_text <- trimws(all_text$all_text)
+
+# Fill empty text with NA
+all_text$all_text[all_text$all_text == ""] <- NA
+
+# Remove column close_notes, cause and description
+all_text <- all_text[-2]
+all_text <- all_text[-2]
+all_text <- all_text[-2]
+
+
+
+
+### - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+### STEP 2: LOAD AND SELECT DATA (E.G. AMAZON descriptions) 
+### - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# OPTIONAL: Specify minimum text length (number of characters)
+all_text <- subset(all_text, all_text$all_text > 100)
+
+# remove NAs in description
+all_text <- all_text[!is.na(all_text$all_text),]
+
+# Transform words into tokens, select basic text preprocessing steps
+new_tokens <- tokens(all_text$all_text,
+                     remove_punct = TRUE,
+                     remove_symbols = TRUE,
+                     remove_numbers = TRUE,
+                     remove_url = TRUE,
+                     remove_separators = TRUE)
+
+
+# Create n-grams of any length
+new_tokens <- tokens_ngrams(new_tokens, n = 1:2)
+
+# Create Document-feature-matrix for new data
+new_myDfm <- dfm(new_tokens, verbose = FALSE)
+
+# Apply the trained LDA model to the new data
+new_descriptions_lda <- LDA(new_myDfm, model = descriptions_lda)
+
+# Extract topics distribution for the new data
+new_topics <- as.data.frame(terms(new_descriptions_lda, 50))
+
+# Link results to metadata
+tmResult <- posterior(new_descriptions_lda)
+theta <- tmResult$topics
+lda_results2 <- cbind(all_text, theta)
+rm (theta,descriptions_lda_td,tmResult,top_terms,tokens)
+
+# add all rows from cases_data to lda_results, where number is missing and add the value 0 to all topics
+
+lda_results2 <- lda_results2[-2]
+
+# fill NA with 0
+lda_results2[is.na(lda_results)] <- 0
+
+
+# Rename columns
+colnames(lda_results2) <- c("number", "topic_network_server", "topic_performance_responseIssues", "topic_vdi_hostedDesktop", "topic_authentication_accounts", "topic_officeApplications", "topic_printing_drive", "topic_support_infrastructure")
+
+# Save the final dataframe
+write_csv(lda_results2, "Data/topicModel_allText.csv")
 

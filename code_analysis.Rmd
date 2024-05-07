@@ -54,12 +54,12 @@ data_gpt$account <-  paste0(substr(data_gpt$account, 1, 2), substr(data_gpt$acco
 #remove columns 17-19
 data_gpt <- data_gpt[,-c(17:19)]
 
-state_index <- grep("prop_state", colnames(data_all))
-group_index <- grep("prop_group", colnames(data_all))
-topic_index <- grep("topic_", colnames(data_all))
+state_index <- grep("prop_state", colnames(data_gpt))
+group_index <- grep("prop_group", colnames(data_gpt))
+topic_index <- grep("topic_", colnames(data_gpt))
 
 #Data Selection
-data_gpt <- data_gpt %>% select(cluster, created_by_group, account, openedToClosed, time_worked, topic_index, state_index, group_index, case_cause, resolution_code, impact, priority, urgency)
+data_gpt <- data_gpt %>% select(cluster, created_by_group, account, openedToClosed, topic_index, group_index, state_index, case_cause, resolution_code, impact, priority, urgency)
 
 #Save file without index
 write.csv(data_gpt, "Data/data_gpt.csv", row.names = FALSE)

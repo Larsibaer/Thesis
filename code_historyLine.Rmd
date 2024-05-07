@@ -153,8 +153,8 @@ process_assignment_groups <- function(df, fieldName, number) {
   return(df)
 }
 
-data <- process_assignment_groups(data, fieldName = "assignment_group", number = 13)
-data <- process_assignment_groups(data, fieldName = "assigned_to", number = 25)
+data <- process_assignment_groups(data, fieldName = "assignment_group", number = 6)
+#data <- process_assignment_groups(data, fieldName = "assigned_to", number = 25)
 ```
 
 ```{r}
@@ -188,7 +188,7 @@ calculate_time_diff <- function(data, field_name) {
 # Apply the function for different fields
 data_state <- calculate_time_diff(data, "state")
 data_assignment_group <- calculate_time_diff(data, "assignment_group")
-data_assigned_to <- calculate_time_diff(data, "assigned_to")
+#data_assigned_to <- calculate_time_diff(data, "assigned_to")
 
 ```
 
@@ -232,14 +232,14 @@ one_hot_encode <- function(df, columns) {
 # Apply one-hot encoding for different fields
 encoded_df_state <- one_hot_encode(data_state, "old")
 encoded_df_assignment_group <- one_hot_encode(data_assignment_group, "old")
-encoded_df_assigned_to <- one_hot_encode(data_assigned_to, "old")
+#encoded_df_assigned_to <- one_hot_encode(data_assigned_to, "old")
 ```
 #Aggregation
 ```{r aggregation}
 # Simplify column removal
 encoded_df_state <- encoded_df_state[-2]
 encoded_df_assignmet_group <- encoded_df_assignment_group[-2]
-encoded_df_assigned_to <- encoded_df_assigned_to[-2]
+#encoded_df_assigned_to <- encoded_df_assigned_to[-2]
 
 # Replace values with percentage
 replace_with_percentage <- function(df, percentage_col) {
@@ -250,7 +250,7 @@ replace_with_percentage <- function(df, percentage_col) {
 
 encoded_df_state <- replace_with_percentage(encoded_df_state, "percentage_time_diff")
 encoded_df_assignmet_group <- replace_with_percentage(encoded_df_assignmet_group, "percentage_time_diff")
-encoded_df_assigned_to <- replace_with_percentage(encoded_df_assigned_to, "percentage_time_diff")
+#encoded_df_assigned_to <- replace_with_percentage(encoded_df_assigned_to, "percentage_time_diff")
 
 # Group by set and sum all columns
 summarize_grouped_df <- function(df) {
@@ -263,7 +263,7 @@ summarize_grouped_df <- function(df) {
 
 grouped_encoded_df_state <- summarize_grouped_df(encoded_df_state)
 grouped_encoded_df_assignmet_group <- summarize_grouped_df(encoded_df_assignmet_group)
-grouped_encoded_df_assigned_to <- summarize_grouped_df(encoded_df_assigned_to)
+#grouped_encoded_df_assigned_to <- summarize_grouped_df(encoded_df_assigned_to)
 
 # Replace column names
 replace_column_names <- function(df, prefix) {
@@ -273,15 +273,18 @@ replace_column_names <- function(df, prefix) {
 
 grouped_encoded_df_state <- replace_column_names(grouped_encoded_df_state, "prop_state_")
 grouped_encoded_df_assignmet_group <- replace_column_names(grouped_encoded_df_assignmet_group, "prop_group_")
-grouped_encoded_df_assigned_to <- replace_column_names(grouped_encoded_df_assigned_to, "prop_user_")
+#grouped_encoded_df_assigned_to <- replace_column_names(grouped_encoded_df_assigned_to, "prop_user_")
 
 ```
 
 #Merge Dataframes
 ```{r merge_dataframes}
 # Merge all dataframes
+# final_df <- Reduce(function(x, y) merge(x, y, by = "set", all = TRUE), 
+#                    list(grouped_encoded_df_state, grouped_encoded_df_assignmet_group, grouped_encoded_df_assigned_to))
+
 final_df <- Reduce(function(x, y) merge(x, y, by = "set", all = TRUE), 
-                   list(grouped_encoded_df_state, grouped_encoded_df_assignmet_group, grouped_encoded_df_assigned_to))
+                   list(grouped_encoded_df_state, grouped_encoded_df_assignmet_group))
 
 # Rename set to number
 colnames(final_df)[1] <- "number"
@@ -290,5 +293,7 @@ colnames(final_df)[1] <- "number"
 #Save Data
 ```{r save_data}
 # Save the final dataframe
+# rename column prop_state_On.hprop_state_ to prop_state_On.hold
+colnames(final_df)[4] <- "prop_state_On.hold"
 write_csv(final_df, "Data/data_proportion.csv")
 ```

@@ -8,62 +8,59 @@ output: html_document
 DO THE code_clustering befor run this code!
 
 ```{r dbscan}
-dbscan_data1 <- dbscan(encoded_df, eps = 1.5, MinPts = 30)
+dbscan_data1 <- dbscan(encoded_df, eps = 1.5, MinPts = 100)
 
-cluster_data <- data.frame(number = data_scaled$number, cluster = dbscan_data1$cluster)
-
-ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(dbscan_data1[["cluster"]]))) +
-  geom_point() +
-  theme_classic() +
-  labs(title = "DBScan Clustering of Random Data", color = "Clusters")
+cluster_data <- data.frame(number = data$number, cluster = dbscan_data1$cluster)
 
 # Merge the cluster information back to the original data
-final_data <- merge(data, cluster_data, by = "number", all.x = TRUE)
+final_data <- merge(cases_data, cluster_data, by = "number", all.x = TRUE)
 
 # Count the number of stocks in each cluster 
-table(final_data$cluster) 
+table(final_data$cluster)
+#Median of openedToClosed as number
+summary(final_data[final_data$cluster == c(1:19),])
+#summary me the distibution of the cluster 7
+summary(final_data[final_data$cluster == 15,])
 ```
 ```{r hirachical single}
-k = z
+k = 8
 # Hierarchical clustering with single linkage
 hier_data1_single <- hclust(dist(encoded_df), method = "single")
 clusters_data1_single <- cutree(hier_data1_single, k = k)
 
-cluster_data <- data.frame(number = data_scaled$number, cluster = clusters_data1_single)
-
-ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(clusters_data1_single))) +
-  geom_point() +
-  theme_classic() +
-  labs(title = "Hierarchical Clustering with Single Linkage of Random Data", color = "Clusters")
+cluster_data <- data.frame(number = data$number, cluster = clusters_data1_single)
 
 # Merge the cluster information back to the original data
-final_data <- merge(data, cluster_data, by = "number", all.x = TRUE)
+final_data <- merge(cases_data, cluster_data, by = "number", all.x = TRUE)
 
 # Count the number of stocks in each cluster 
 table(final_data$cluster) 
+#Median of openedToClosed as number
+summary(final_data[final_data$cluster == c(1,2,3,4,5,6,8),])
+#summary me the distibution of the cluster 7
+summary(final_data[final_data$cluster == 7,])
 ```
 
 ```{r hirachical complete}
-k = 6
+k = 8
 
 # Hierarchical clustering with complete linkage
 hier_data1_comp <- hclust(dist(encoded_df), method = "complete")
 clusters_data1_comp <- cutree(hier_data1_comp, k = k)
 
 # If encoded_df doesn't already include the number, you'll need to ensure it's correctly aligned with original data
-cluster_data <- data.frame(number = data_scaled$number, cluster = clusters_data1_comp)
-
-ggplot(encoded_df, aes(x = pc1, y = pc2, color = factor(clusters_data1_comp))) +
-  geom_point() +
-  theme_classic() +
-  labs(title = "Hierarchical Clustering with Single Linkage of Random Data", color = "Clusters")
-
+cluster_data <- data.frame(number = data$number, cluster = clusters_data1_comp)
 
 # Merge the cluster information back to the original data
-final_data <- merge(data, cluster_data, by = "number", all.x = TRUE)
+final_data <- merge(cases_data, cluster_data, by = "number", all.x = TRUE)
 
 # Count the number of stocks in each cluster 
 table(final_data$cluster) 
+
+#Median of openedToClosed as number
+summary(final_data[final_data$cluster == c(1,2,3,4,5,6,7),])
+#summary me the distibution of the cluster 7
+summary(final_data[final_data$cluster == 8,])
 ```
 
 ```{r analyzeCluster}
@@ -81,16 +78,5 @@ ggplot(final_data, aes(x = cluster, y = final_data$openedToClosed)) +
   theme_minimal() +
   labs(title = "Distribution of Opened to Closed Across Clusters", y = "Opened to Closed (Hours)", x = "Cluster")
 
-ggplot(final_data, aes(x = cluster, y = final_data$time_worked)) + 
-  geom_boxplot() +
-  theme_minimal() +
-  labs(title = "Distribution of Opened to Closed Across Clusters", y = "Opened to Closed (Hours)", x = "Cluster")
-
-# Plot the distribution of account across clusters
-ggplot(final_data, aes(x = cluster, fill = account)) + 
-  geom_bar() +
-  theme_minimal() +
-  labs(title = "Distribution of Account Across Clusters", y = "Count", x = "Cluster") +
-  scale_fill_discrete(name = "Account")
 
 ```
