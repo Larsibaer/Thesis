@@ -2,6 +2,9 @@ Data/
 Templates/
 wordcloud/
 html/
+Archiv/
+plots/
+images/
 .RData
 .Rproj.user
 code_cluster2_files/
