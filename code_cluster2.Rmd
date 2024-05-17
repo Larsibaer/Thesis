@@ -8,7 +8,8 @@ output: html_document
 DO THE code_clustering befor run this code!
 
 ```{r dbscan}
-dbscan_data1 <- dbscan(encoded_df, eps = 1.5, MinPts = 100)
+dbscan_data1 <- dbscan(encoded_df, eps = 3.75, MinPts = 30)
+#dbscan_data1 <- dbscan(encoded_df, eps = 3.75, MinPts = 25)
 
 cluster_data <- data.frame(number = data$number, cluster = dbscan_data1$cluster)
 
@@ -18,9 +19,9 @@ final_data <- merge(cases_data, cluster_data, by = "number", all.x = TRUE)
 # Count the number of stocks in each cluster 
 table(final_data$cluster)
 #Median of openedToClosed as number
-summary(final_data[final_data$cluster == c(1:19),])
-#summary me the distibution of the cluster 7
-summary(final_data[final_data$cluster == 15,])
+summary(final_data[final_data$cluster == c(1:3,5:12),])
+#summary me the distibution of the cluster 4
+summary(final_data[final_data$cluster == 4,])
 ```
 ```{r hirachical single}
 k = 8
@@ -42,8 +43,7 @@ summary(final_data[final_data$cluster == 7,])
 ```
 
 ```{r hirachical complete}
-k = 8
-
+k =11
 # Hierarchical clustering with complete linkage
 hier_data1_comp <- hclust(dist(encoded_df), method = "complete")
 clusters_data1_comp <- cutree(hier_data1_comp, k = k)

@@ -70,6 +70,15 @@ topics <- as.data.frame(terms(descriptions_lda, 50))
 # Convert into tidy-format to visualize results 
 descriptions_lda_td <- tidy(descriptions_lda)
 
+# Rename values of topic column
+descriptions_lda_td$topic <- factor(descriptions_lda_td$topic)
+
+# Assign topic labels based on top-terms
+descriptions_lda_td$topic <- factor(descriptions_lda_td$topic, labels = c("Network Server", "Performance and Response Issues", "VDI and Hosted Desktop", "Authentication and Accounts", "Office Applications", "Printing and Drive", "Support Infrastructure"))
+
+# Save the descriptions_lda_td
+write_csv(descriptions_lda_td, "Data/topicModel_descriptions_lda_td.csv")
+
 # Extract top-terms per topic 
 top_terms <- descriptions_lda_td %>%
   group_by(topic) %>%
@@ -89,7 +98,6 @@ top_terms %>%
 tmResult <- posterior(descriptions_lda)
 theta <- tmResult$topics
 lda_results <- cbind(descriptions, theta)
-rm (theta,descriptions_lda_td,tmResult,top_terms,tokens)
 
 
 
@@ -174,9 +182,6 @@ all_text <- all_text[-2]
 ### STEP 2: LOAD AND SELECT DATA (E.G. AMAZON descriptions) 
 ### - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# OPTIONAL: Specify minimum text length (number of characters)
-all_text <- subset(all_text, all_text$all_text > 100)
-
 # remove NAs in description
 all_text <- all_text[!is.na(all_text$all_text),]
 
@@ -205,7 +210,7 @@ new_topics <- as.data.frame(terms(new_descriptions_lda, 50))
 tmResult <- posterior(new_descriptions_lda)
 theta <- tmResult$topics
 lda_results2 <- cbind(all_text, theta)
-rm (theta,descriptions_lda_td,tmResult,top_terms,tokens)
+rm (theta,new_descriptions_lda_td,tmResult,top_terms,tokens)
 
 # add all rows from cases_data to lda_results, where number is missing and add the value 0 to all topics
 
@@ -220,4 +225,33 @@ colnames(lda_results2) <- c("number", "topic_network_server", "topic_performance
 
 # Save the final dataframe
 write_csv(lda_results2, "Data/topicModel_allText.csv")
+
+
+# Extract top-terms per topic 
+top_terms <- descriptions_lda_td %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# Convert top_terms topic to string
+top_terms$topic <- as.character(top_terms$topic)
+
+top_terms$topic[0:10] <- "Network & Server"
+top_terms$topic[11:20] <- "Performance & Response Issues"
+top_terms$topic[21:30] <- "VDI & Hosted Desktop"
+top_terms$topic[31:40] <- "Authentication & Accounts"
+top_terms$topic[41:50] <- "Office Applications"
+top_terms$topic[51:60] <- "Printing & Drive"
+top_terms$topic[61:70] <- "Support Infrastructure"
+
+
+
+# Visualize top-terms and their loadings (can you assign topic labels based on this information?) 
+top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
 

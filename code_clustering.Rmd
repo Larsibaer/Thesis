@@ -140,7 +140,7 @@ elbow_data <- data.frame(
 # with the specific number of clusters and we extract the total within-cluster sum of squares 
 # for each into our elbow_data object.
 for(i in 1:15) {
-  set.seed(111)
+  set.seed(123456)
   km <- kmeans(encoded_df, centers = i)
   elbow_data[i, "total_withinss"] <- km$tot.withinss
 }
@@ -165,7 +165,7 @@ I choose 8.
 # Let's run the k-means with the desired number of clusters 
 data_scaled <- data
 k <- 8
-set.seed(1)
+set.seed(123456)
 kmeans_model <- kmeans(encoded_df, centers = k)
 
 # Run PCA and extract principal components
