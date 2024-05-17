@@ -1,0 +1,185 @@
+---
+title: "Thesis"
+author: "Lars Wenger"
+date: "2024-02-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r install}
+# Install necessary libraries if not already installed
+# Uncomment the lines for the packages that you need to install
+
+# install.packages("DescTools")
+# install.packages("xgboost")
+# install.packages("caret")
+# install.packages("dplyr")
+# install.packages("tidyverse")
+# install.packages("mltools")
+# install.packages("reshape2")
+# install.packages("data.table")
+# install.packages("pracma")
+# install.packages("rsample")
+# install.packages("PRROC")
+# install.packages("e1071")
+# install.packages("dlookr")
+# install.packages("pROC")
+# install.packages("ROCR")
+# install.packages("nnet")
+```
+```{r libraries}
+# Load necessary libraries
+library(DescTools)
+library(xgboost)
+library(caret)
+library(dplyr)
+library(tidyverse)
+library(mltools)
+library(reshape2)
+library(data.table)
+library(pracma)
+library(rsample)
+library(PRROC)
+library(e1071)
+library(dlookr)
+library(pROC)
+library(ROCR)
+library(nnet)
+library(ggplot2)
+library(lubridate)  # for date manipulation
+options(scipen=999)
+
+```
+
+
+```{r import}
+# Set working directory and import data
+rm(list=ls())
+set.seed(7)
+
+setwd("C:/Thesis")
+cases_data <- read_csv("Data/sn_customerservice_case.csv", locale = locale(encoding = "UTF-8"))
+data <- cases_data  # Create a working copy of the dataset
+```
+
+```{r strucutre}
+# Select relevant columns for analysis
+data <- select(cases_data, 
+               number, 
+               case = short_description, 
+               description, 
+               case_type = u_case_type, 
+               first_response_time, 
+               closed = closed_at, 
+               opened = opened_at, 
+               account, 
+               created_by = sys_created_by, 
+               business_service, 
+               assigned_to, 
+               assignment_group, 
+               time_worked = u_total_time_worked, 
+               impact, 
+               priority, 
+               urgency, 
+               comments = comments_and_work_notes, 
+               case_cause = u_case_cause, 
+               cause, 
+               close_notes, 
+               resolution_code)
+
+```
+
+```{r data}
+# Filter data between dates and remove rows where cases are not closed
+data <- data %>% 
+  filter(Year(strptime(data$opened, "%d-%m-%Y %H:%M:%S", tz="UTC")) <= Year("2024-02-01")) %>%
+  filter(Year(strptime(data$opened, "%d-%m-%Y %H:%M:%S", tz="UTC")) >= Year("2020-01-01")) %>%
+  filter(!is.na(closed))
+
+```
+
+```{r type}
+# Transform variable types and create new features
+data$opened <- as.POSIXct(strptime(data$opened, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+data$closed <- as.POSIXct(strptime(data$closed, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+data$first_response_time <- as.POSIXct(strptime(data$first_response_time, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+data$impact <- as.factor(data$impact)
+data$priority <- as.factor(data$priority)
+data$urgency <- as.factor(data$urgency)
+data$case_cause <- as.factor(data$case_cause)
+data$resolution_code <- as.factor(data$resolution_code)
+data$assignment_group <- as.factor(data$assignment_group)
+data$assigned_to <- as.factor(data$assigned_to)
+data$created_by <- as.factor(data$created_by)
+data$business_service <- as.factor(data$business_service)
+data$case_type <- as.factor(data$case_type)
+data$account <- as.factor(data$account)
+data$openedToClosed <- as.numeric(difftime(data$closed, data$opened, units = "hours"))
+# Create a new column to categorize 'created_by' values
+data$created_by_group <- as.factor(ifelse(data$created_by == "admin", "System", 
+                                          ifelse(grepl("@unico.ch", data$created_by), "Unico", "User")))
+```
+
+```{r merging-sla}
+# Read and preprocess SLA data
+sla_data_clean <- read_csv("Data/task_sla.csv")
+
+# Select and clean relevant columns from SLA data
+sla_data <- select(sla_data_clean, task, business_percentage, sla_has_breached = has_breached, end_time = task.closed_at)
+sla_data <- sla_data %>% distinct(task, .keep_all = TRUE)  # Remove duplicates
+sla_data$end_time <- as.POSIXct(strptime(sla_data$end_time, "%d-%m-%Y %H:%M:%S", tz="UTC"))
+
+# Merge main data with SLA data
+data <- merge(x = data, y = sla_data, 
+              by.x = c('number', 'closed'), 
+              by.y = c('task', 'end_time'), 
+              all.x = TRUE)
+
+data$business_percentage <- as.numeric(data$business_percentage)
+data$sla_has_breached <- as.factor(data$sla_has_breached)
+
+
+```
+```{r check}
+# Remove rows with NA values in specific columns
+data <- na.omit(select(data, number, account, created_by_group, business_service, assignment_group, 
+                       impact, priority, urgency, sla_has_breached, case_cause, resolution_code, 
+                       opened, closed, time_worked, openedToClosed, business_percentage))
+```
+
+```{r cleaning}
+# Remove rows where 'account', 'business_service', or 'assignment_group' appears less than a specified number of times
+data <- data %>% group_by(account) %>% filter(n() > 100)
+data <- data %>% group_by(business_service) %>% filter(n() > 100)
+data <- data %>% group_by(assignment_group) %>% filter(n() > 20)
+```
+
+```{r,echo=FALSE}
+# Function to handle outliers by capping them at the 10th and 90th percentiles
+outlier <- function(x) {
+  quantiles <- quantile(x, c(.1, .9))
+  x[x < quantiles[1]] <- quantiles[1]
+  x[x > quantiles[2]] <- quantiles[2]
+  x
+}
+```
+
+```{r, echo=FALSE}
+# Apply outlier function to specific columns
+# data['time_worked'] <- map_df(data['time_worked'], outlier) --> Not used in the analysis
+data['openedToClosed'] <- map_df(data['openedToClosed'], outlier)
+# data['business_percentage'] <- map_df(data['business_percentage'], outlier) --> Not used in the analysis
+```
+
+```{r}
+# Merge additional descriptive fields from original dataset
+data <- merge(data, cases_data[c('number', 'description', 'short_description', 'cause', 'close_notes')], 
+              by = "number", all.x = FALSE)
+```
+
+```{r save}
+# Save the data
+write.csv(data, "Data/data.csv",row.names = FALSE)
+```

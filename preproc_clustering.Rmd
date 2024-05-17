@@ -1,0 +1,153 @@
+---
+title: "Thesis - Clustering"
+author: "Lars Wenger"
+date: "2024-02-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r libraries}
+library(ggplot2)
+library(dplyr)
+library(cluster)
+library(factoextra)
+library(mlbench)
+library(tidyr)
+library(readr)
+library(FactoMineR)
+library(dbscan)
+library(fpc)
+library(data.table)
+library(tidyverse)
+options(scipen=999)
+
+```
+```{r import}
+# Import data
+rm(list=ls())
+set.seed(7)
+setwd("C:/Thesis")
+cases_data <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))
+data <- cases_data # Make a copy from the original dataset
+
+# Get Column position of description to close notes
+description_index <- which(colnames(data) == "description")
+cause_index <- which(colnames(data) == "cause")
+close_notes_index <- which(colnames(data) == "close_notes")
+assignmet_group_index <- which(colnames(data) == "assignment_group")
+case_cause_index <- which(colnames(data) == "case_cause")
+resolution_code_index <- which(colnames(data) == "resolution_code")
+
+# Remove the columns
+data <- data[,-c(description_index, cause_index, close_notes_index, assignmet_group_index, case_cause_index, resolution_code_index)]
+```
+```{r}
+# Add weekday column
+data$weekday <- weekdays(data$opened)
+```
+
+```{r tfidf}
+tfidf_1 <- read_csv("Data/topicModel_description.csv")
+```
+
+
+```{r oneHotEncoding}
+one_hot_encode <- function(df, columns) {
+  if(!is.character(columns)) {
+    stop("columns argument must be a character vector specifying column names to encode")
+  }
+  if(!all(columns %in% names(df))) {
+    stop("Not all specified columns exist in the dataframe")
+  }
+  result_df <- df[, !(names(df) %in% columns)]
+  for(column in columns) {
+    temp_df <- data.frame(df[[column]], stringsAsFactors = FALSE)
+    colnames(temp_df) <- column
+    encoded_matrix <- model.matrix(~ . - 1, data = temp_df)
+    encoded_df <- data.frame(encoded_matrix)
+    colnames(encoded_df) <- gsub("X", column, colnames(encoded_df))
+    result_df <- cbind(result_df, encoded_df)
+  }
+  return(cbind(df[1], result_df))
+}
+
+data <- select(data, number, created_by_group, impact, priority, urgency, weekday)
+encoded_df_withCaseNumber <- one_hot_encode(data, c("created_by_group", "impact", "priority", "urgency", "weekday"))
+encoded_df <- encoded_df_withCaseNumber %>% select(-number)
+encoded_df <- cbind(encoded_df, tfidf_1[-1])
+encoded_df <- scale(encoded_df)
+```
+
+
+```{r dbscan}
+dbscan_data1 <- dbscan(encoded_df, eps = 3.75, MinPts = 30)
+#dbscan_data1 <- dbscan(encoded_df, eps = 3.75, MinPts = 25)
+
+cluster_data <- data.frame(number = data$number, cluster = dbscan_data1$cluster)
+
+# Merge the cluster information back to the original data
+final_data <- merge(cases_data, cluster_data, by = "number", all.x = TRUE)
+
+# Count the number of stocks in each cluster 
+table(final_data$cluster)
+#Median of openedToClosed as number
+summary(final_data[final_data$cluster == c(1:3,5:12),])
+#summary me the distibution of the cluster 4
+summary(final_data[final_data$cluster == 4,])
+```
+
+```{r}
+# PCA Analysis
+pca_fit <- PCA(encoded_df, graph = FALSE)
+pc1 <- pca_fit$ind$coord[, 1]
+pc2 <- pca_fit$ind$coord[, 2]
+
+summary(pc1)
+summary(pc2)
+
+pca_fit$eig
+
+sum_PCA_2 <- pca_fit$eig[2, 3]
+cat("Cumulative variance explained by PC1 and PC2:", round(sum_PCA_2, 2), "\n")
+sum_PCA_3 <- pca_fit$eig[3, 3]
+cat("Cumulative variance explained by PC1 until PC3:", round(sum_PCA_3, 2), "\n")
+
+pca_fit$var$contrib
+
+ggplot(cluster_data, aes(pc1, pc2, color = cluster)) +
+  geom_point() +
+  labs(color = "Cluster") +
+  theme_minimal()
+```   
+```{r}
+# Merge the cluster information back to the original data
+final_data <- merge(cases_data, cluster_data, by = "number", all.x = TRUE)
+```
+
+```{r analyzeCluster}
+# Analyze Clusters
+final_data$cluster <- as.factor(final_data$cluster)
+
+summary_stats <- final_data %>%
+  group_by(cluster) %>%
+  summarise_all(funs(mean = mean(., na.rm = TRUE), sd = sd(., na.rm = TRUE)))
+
+ggplot(final_data, aes(x = cluster, y = final_data$openedToClosed)) + 
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution of Opened to Closed Across Clusters", y = "Opened to Closed (Hours)", x = "Cluster")
+
+
+summary(final_data[final_data$cluster == c(1,2,3,4,5,6,8),])
+summary(final_data[final_data$cluster == 7,])
+```
+
+
+```{r save}
+# Save Data
+write.csv(encoded_df, "Data/encoded_df.csv", row.names = FALSE)
+final_data <- select(final_data, c("number", "cluster"))
+write.csv(final_data, "Data/data_withclusters.csv", row.names = FALSE)
+```

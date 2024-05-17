@@ -12,61 +12,41 @@ knitr::opts_chunk$set(echo = T,
                       results = "hide")
 ```
 
-## Import Libraries
+# Import Libraries
 ```{r echo = T, results = 'hide'}
-libraries = c( "fpp3", "ggplot2", "dplyr", "tidyr", "readxl", "forecast", "zoo", "tsibble", "GGally", "lubridate", "tidyverse", "stringi")
+libraries <- c("fpp3", "ggplot2", "dplyr", "tidyr", "readxl", "forecast", "zoo", "tsibble", "GGally", "lubridate", "tidyverse", "stringi")
 
+# Install any missing libraries
 lapply(libraries, function(x) if (!(x %in% installed.packages())) {
   install.packages(x)
 })
 
+# Load libraries
 lapply(libraries, library, quietly = TRUE, character.only = TRUE)
-```
-```{r}
-# rm(list=ls())
-# 
-# setwd("C:/Thesis")
-# 
-# history_data <- read_delim("Data/historyLines/sys_history_line1.csv", locale = locale(encoding = "UTF-8"))
-# 
-# #insert empty column to history_data sys id as first column
-# history_data <- history_data %>% 
-#   mutate(sys_id = NA) %>% 
-#   select(sys_id, everything())
-# 
-# # Load the 15 csv from Data/historyLines folder. From historyLines/sys_history_line1.csv until sys_history_line15.csv alway add the rows to the history_data dataframe. Separatero of csv i "," and encoding is "UTF-8"
-# 
-# for (i in 2:15) {
-#   history_data <- bind_rows(history_data, read_delim(paste0("Data/historyLines/sys_history_line", i, ".csv"),delim=",", locale = locale(encoding = "UTF-8")))
-# }
-# 
-# #remove first column
-# history_data <- history_data[,-1]
-# #Save new dataframe to a csv file
-# write_csv(history_data, "Data/sys_history_line.csv")
 ```
 
 # Read Data
 ```{r read_data}
+# Clear the workspace
 rm(list=ls())
 
+# Set working directory
 setwd("C:/Thesis")
+
 # Read system history data
 history_data <- read_csv("Data/sys_history_line.csv", locale = locale(encoding = "UTF-8"))
 
-# add seconds to update_time if not present
+# Ensure 'update_time' has seconds, convert to POSIXct
 history_data$update_time <- ifelse(nchar(history_data$update_time) == 16, paste0(history_data$update_time, ":00"), history_data$update_time)
-
 history_data$update_time <- as.POSIXct(strptime(history_data$update_time, "%d.%m.%Y %H:%M:%S", tz="UTC"))
 
-
+# Select relevant columns
 history_data <- select(history_data, set, update_time, field, old, new)
 
-# Read all data
+# Read main data
 data_all <- read_csv("Data/data.csv", locale = locale(encoding = "UTF-8"))
 
-
-# Merge data by 'set' and 'number'
+# Merge history data with main data on 'set' and 'number'
 data <- history_data %>%
   mutate(set = trimws(gsub("Case:", " ", set))) %>%
   inner_join(select(data_all, number, account, opened, closed, openedToClosed), by = c("set" = "number"))
@@ -75,78 +55,76 @@ data <- history_data %>%
 # Data Processing
 
 ```{r}
-# Count how many different set numbers are in dataset and print number
-data %>%
+# Count unique 'set' numbers
+unique_sets <- data %>%
   count(set) %>%
   nrow()
+print(unique_sets)
 
-# Plot amount of each caterogy in 'field'
+# Plot the frequency of each category in 'field'
 history_data %>%
   count(field) %>%
   ggplot(aes(x = fct_reorder(field, n), y = n)) +
   geom_col() +
   coord_flip() +
-  labs(title = "Amount of each category in 'field'")
+  labs(title = "Frequency of each category in 'field'")
 
+# Plot the frequency of each 'old' state when 'field' is 'state'
 history_data %>%
   filter(field == "state") %>%
   count(old) %>%
   ggplot(aes(x = fct_reorder(old, n), y = n)) +
   geom_col() +
   coord_flip() +
-  labs(title = "Amount of each category in 'old'")
+  labs(title = "Frequency of each category in 'old' for 'state' field")
 
-
-
+# Plot the frequency of each 'old' assignment group when 'field' is 'assignment_group'
 history_data %>%
   filter(field == "assignment_group") %>%
   count(old) %>%
   ggplot(aes(x = fct_reorder(old, n), y = n)) +
   geom_col() +
   coord_flip() +
-  labs(title = "Amount of each category in 'old'")
+  labs(title = "Frequency of each category in 'old' for 'assignment_group' field")
 
 
 ```
+# Data Cleaning and Transformation
+
 
 ```{r data_processing}
-#If old value is "Offen" change it to "Open"
+# Translate 'old' values from German to English
 data <- data %>%
   mutate(old = ifelse(old == "Offen", "Open", old)) %>%
   mutate(old = ifelse(old == "Geschlossen", "Closed", old)) %>%
   mutate(old = ifelse(old == "In Bearbeitung", "Work in Progress", old)) %>%
   mutate(old = ifelse(old == "Wartend", "On hold", old)) %>%
   mutate(old = ifelse(old == "Gelöst", "Resolved", old))
-# Filter out records where update_time is after closed but new is not "Closed"
+
+# Filter out records where 'update_time' is after 'closed' but 'new' is not "Closed"
 data <- data %>%
   filter(!(update_time > closed + hours(2) & new != "Closed"))
 
-# If only one Change was made on a field, replace 'old' with 'new'
-# Example condition for replacement
+# Replace 'old' with 'new' if only one change was made on a field
 replace_condition <- with(data, ave(seq_along(set), set, field, FUN = length) == 1)
-
-# Replace 'old' with 'new' based on condition
 data$old[replace_condition] <- data$new[replace_condition]
-
 ```
 
-```{r}
-# Function to process assignment groups and assigned_to fields
-process_assignment_groups <- function(df, fieldName, number) {
+# Assignment Group Processing
 
-  # Filter to get the rows where the field is 'assignment_group'
+```{r}
+# Function to process assignment groups and replace infrequent groups with "Other"
+process_assignment_groups <- function(df, fieldName, number) {
   filtered_data <- df %>%
     filter(field == fieldName) %>%
     filter(!is.na(old))
   
-  # Count how many times each assignment_group occurs and identify the top groups
   top_groups <- filtered_data %>%
     count(old) %>%
     arrange(desc(n)) %>%
     slice_head(n = number) %>%
     pull(old)
   
-  # Replace all other groups with "Other" within the filtered data
   df <- df %>%
     mutate(old = ifelse(field == fieldName & old %in% top_groups, old, ifelse(field == fieldName, "Other", old)))
   
@@ -154,29 +132,24 @@ process_assignment_groups <- function(df, fieldName, number) {
 }
 
 data <- process_assignment_groups(data, fieldName = "assignment_group", number = 6)
-#data <- process_assignment_groups(data, fieldName = "assigned_to", number = 25)
 ```
 
+# Time Difference Calculation
+
 ```{r}
-
-# Calculate time differences
+# Calculate time differences from 'opened' to 'update_time'
 data <- data %>%
-  mutate(
-    time_diff_opened = as.numeric(update_time - opened)
-  )
+  mutate(time_diff_opened = as.numeric(update_time - opened))
 
-# Define function to calculate time differences for different fields
+# Function to calculate time differences for different fields
 calculate_time_diff <- function(data, field_name) {
   data %>%
     filter(field == field_name) %>%
     arrange(update_time) %>%
     group_by(set) %>%
     mutate(
-      # Calculate the time difference between updates
       time_diff_previous = as.numeric(difftime(update_time, lag(update_time, default = first(opened)), units = "hours")),
-      # Calculate the sum of time differences, handling NA values
       sum_time_diff = sum(time_diff_previous, na.rm = TRUE),
-      # Calculate the percentage time difference
       percentage_time_diff = ifelse(is.na(time_diff_previous) & n() == 1, 100, time_diff_previous / sum_time_diff * 100)
     ) %>%
     filter(!is.na(old)) %>%
@@ -184,64 +157,49 @@ calculate_time_diff <- function(data, field_name) {
     ungroup()
 }
 
-
 # Apply the function for different fields
 data_state <- calculate_time_diff(data, "state")
 data_assignment_group <- calculate_time_diff(data, "assignment_group")
-#data_assigned_to <- calculate_time_diff(data, "assigned_to")
 
 ```
 
 # Encoding
+
 ```{r encoding}
-# One-hot encode
+# One-hot encode specified columns
 one_hot_encode <- function(df, columns) {
-  # Ensure 'columns' is a character vector
-  if(!is.character(columns)) {
-    stop("columns argument must be a character vector specifying column names to encode")
-  }
+  if(!is.character(columns)) stop("columns argument must be a character vector specifying column names to encode")
+  if(!all(columns %in% names(df))) stop("Not all specified columns exist in the dataframe")
   
-  # Check if specified columns exist in the dataframe
-  if(!all(columns %in% names(df))) {
-    stop("Not all specified columns exist in the dataframe")
-  }
-  
-  # Start with the original dataframe minus the columns to be encoded
   result_df <- df[, !(names(df) %in% columns)]
   
-  # Iterate over the columns and perform one-hot encoding
   for(column in columns) {
-    # Create a temporary dataframe to avoid altering the original data
     temp_df <- data.frame(df[[column]], stringsAsFactors = FALSE)
     colnames(temp_df) <- column
     
-    # Apply model.matrix(), remove intercept column, and convert to dataframe
     encoded_matrix <- model.matrix(~ . - 1, data = temp_df)
     encoded_df <- data.frame(encoded_matrix)
     
-    # Rename encoded columns to include original column name for clarity
     colnames(encoded_df) <- gsub("X", column, colnames(encoded_df))
     
-    # Combine with the result dataframe
     result_df <- cbind(result_df, encoded_df)
   }
   
   return(cbind(df[1], result_df))
 }
 
-# Apply one-hot encoding for different fields
+# Apply one-hot encoding to different fields
 encoded_df_state <- one_hot_encode(data_state, "old")
 encoded_df_assignment_group <- one_hot_encode(data_assignment_group, "old")
-#encoded_df_assigned_to <- one_hot_encode(data_assigned_to, "old")
 ```
-#Aggregation
-```{r aggregation}
-# Simplify column removal
-encoded_df_state <- encoded_df_state[-2]
-encoded_df_assignmet_group <- encoded_df_assignment_group[-2]
-#encoded_df_assigned_to <- encoded_df_assigned_to[-2]
 
-# Replace values with percentage
+# Aggregation
+
+```{r aggregation}
+# Remove unnecessary columns and replace values with percentages
+encoded_df_state <- encoded_df_state[-2]
+encoded_df_assignment_group <- encoded_df_assignment_group[-2]
+
 replace_with_percentage <- function(df, percentage_col) {
   df[, -c(1, 2)] <- df[, -c(1, 2)] * df[, percentage_col]
   df[, -1] <- round(df[, -1], 2)
@@ -249,21 +207,18 @@ replace_with_percentage <- function(df, percentage_col) {
 }
 
 encoded_df_state <- replace_with_percentage(encoded_df_state, "percentage_time_diff")
-encoded_df_assignmet_group <- replace_with_percentage(encoded_df_assignmet_group, "percentage_time_diff")
-#encoded_df_assigned_to <- replace_with_percentage(encoded_df_assigned_to, "percentage_time_diff")
+encoded_df_assignment_group <- replace_with_percentage(encoded_df_assignment_group, "percentage_time_diff")
 
-# Group by set and sum all columns
+# Summarize grouped dataframes
 summarize_grouped_df <- function(df) {
-  df <- df %>%
+  df %>%
     group_by(set) %>%
     summarise(across(-1, sum, na.rm = TRUE)) %>%
     ungroup()
-  return(df)
 }
 
 grouped_encoded_df_state <- summarize_grouped_df(encoded_df_state)
-grouped_encoded_df_assignmet_group <- summarize_grouped_df(encoded_df_assignmet_group)
-#grouped_encoded_df_assigned_to <- summarize_grouped_df(encoded_df_assigned_to)
+grouped_encoded_df_assignment_group <- summarize_grouped_df(encoded_df_assignment_group)
 
 # Replace column names
 replace_column_names <- function(df, prefix) {
@@ -272,25 +227,21 @@ replace_column_names <- function(df, prefix) {
 }
 
 grouped_encoded_df_state <- replace_column_names(grouped_encoded_df_state, "prop_state_")
-grouped_encoded_df_assignmet_group <- replace_column_names(grouped_encoded_df_assignmet_group, "prop_group_")
-#grouped_encoded_df_assigned_to <- replace_column_names(grouped_encoded_df_assigned_to, "prop_user_")
-
+grouped_encoded_df_assignment_group <- replace_column_names(grouped_encoded_df_assignment_group, "prop_group_")
 ```
 
-#Merge Dataframes
+# Merge Dataframes
+
 ```{r merge_dataframes}
 # Merge all dataframes
-# final_df <- Reduce(function(x, y) merge(x, y, by = "set", all = TRUE), 
-#                    list(grouped_encoded_df_state, grouped_encoded_df_assignmet_group, grouped_encoded_df_assigned_to))
-
 final_df <- Reduce(function(x, y) merge(x, y, by = "set", all = TRUE), 
-                   list(grouped_encoded_df_state, grouped_encoded_df_assignmet_group))
+                   list(grouped_encoded_df_state, grouped_encoded_df_assignment_group))
 
-# Rename set to number
+# Rename 'set' to 'number'
 colnames(final_df)[1] <- "number"
 ```
 
-#Save Data
+# Save Data
 ```{r save_data}
 # Save the final dataframe
 # rename column prop_state_On.hprop_state_ to prop_state_On.hold

@@ -7,22 +7,53 @@ output: html_document
 
 DO THE code_clustering befor run this code!
 
-```{r dbscan}
-dbscan_data1 <- dbscan(encoded_df, eps = 3.75, MinPts = 30)
-#dbscan_data1 <- dbscan(encoded_df, eps = 3.75, MinPts = 25)
+```{r}
+# K-means Clustering
+set.seed(72) 
+k <- 3
+kmeans_model <- kmeans(encoded_df, centers = k)
 
-cluster_data <- data.frame(number = data$number, cluster = dbscan_data1$cluster)
+elbow_data <- data.frame(
+  k = 1:15,
+  total_withinss = numeric(15)
+)
 
-# Merge the cluster information back to the original data
-final_data <- merge(cases_data, cluster_data, by = "number", all.x = TRUE)
+for(i in 1:15) {
+  set.seed(123456)
+  km <- kmeans(encoded_df, centers = i)
+  elbow_data[i, "total_withinss"] <- km$tot.withinss
+}
 
-# Count the number of stocks in each cluster 
-table(final_data$cluster)
-#Median of openedToClosed as number
-summary(final_data[final_data$cluster == c(1:3,5:12),])
-#summary me the distibution of the cluster 4
-summary(final_data[final_data$cluster == 4,])
+ggplot(elbow_data, aes(x = k, y = total_withinss)) + 
+  geom_line() + 
+  geom_point() + 
+  scale_x_continuous(breaks = seq(1, 15, 1)) +
+  labs(title = "Elbow Method", x = "Number of Clusters", 
+       y = "Total Within-Cluster Sum of Squares") +
+  theme_minimal()
 ```
+
+```{r, k-mean, message=FALSE}
+k <- 8
+set.seed(123456)
+kmeans_model <- kmeans(encoded_df, centers = k)
+
+pca_fit <- PCA(encoded_df, graph = FALSE)
+pc1 <- pca_fit$ind$coord[, 1]
+pc2 <- pca_fit$ind$coord[, 2]
+
+cluster_data <- data.frame(cluster = as.factor(kmeans_model$cluster), pc1, pc2)
+
+data$cluster <- as.factor(kmeans_model$cluster) 
+table(data$cluster) 
+data_subset <- data %>% 
+  group_by(cluster) %>%
+  slice_head(n = 2) %>% 
+  ungroup()
+
+```
+
+
 ```{r hirachical single}
 k = 8
 # Hierarchical clustering with single linkage
